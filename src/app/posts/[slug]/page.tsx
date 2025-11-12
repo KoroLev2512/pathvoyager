@@ -1,0 +1,290 @@
+import Image from "next/image";
+import { notFound } from "next/navigation";
+import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
+import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
+import { PromoBanner } from "@/shared/ui/PromoBanner";
+import { categories } from "@/entities/category/model/data";
+import { articleDetailsMocks } from "@/shared/mocks/articleDetails";
+import { popularArticlesMocks, recentArticlesMocks } from "@/shared/mocks";
+
+const categoriesMap = Object.fromEntries(
+  categories.map((category) => [category.id, category]),
+);
+
+// Создаем маппинг из всех моков: сначала детальные статьи, потом базовые
+const allMocksMap = new Map<string, typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number]>();
+
+// Добавляем детальные статьи (приоритет)
+articleDetailsMocks.forEach((article) => {
+  allMocksMap.set(article.id, article);
+});
+
+// Добавляем базовые статьи (fallback)
+[...popularArticlesMocks, ...recentArticlesMocks].forEach((article) => {
+  if (!allMocksMap.has(article.id)) {
+    allMocksMap.set(article.id, article);
+  }
+});
+
+type ArticlePageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+type ArticleResponse = {
+  slug: string;
+  title: string;
+  excerpt?: string;
+  heroImage?: string;
+  categoryId: string;
+  authorName?: string;
+  readTime?: string;
+  publishedAt?: string;
+  content: Array<
+    |
+      {
+        type: "heading" | "paragraph";
+        text: string;
+      }
+    | { type: "quote"; text: string; author?: string }
+    | { type: "list"; items: string[] }
+    | { type: "banner"; id: string }
+  >;
+};
+
+const API_BASE_URL = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const fetchArticleFromApi = async (slug: string): Promise<ArticleResponse | null> => {
+  if (!API_BASE_URL) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/articles/${slug}`, {
+      next: { revalidate: 0 },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    return {
+      slug: data.slug,
+      title: data.title,
+      excerpt: data.excerpt ?? undefined,
+      heroImage: data.heroImage ?? undefined,
+      categoryId: data.categoryId,
+      authorName: data.authorName ?? undefined,
+      readTime: data.readTime ?? undefined,
+      publishedAt: data.publishedAt ?? undefined,
+      content: data.content ?? [],
+    };
+  } catch (error) {
+    console.error("Failed to fetch article from API", error);
+    return null;
+  }
+};
+
+const renderContentBlock = (
+  block: ArticleResponse["content"][number],
+  index: number,
+) => {
+  switch (block.type) {
+    case "heading":
+      return (
+        <h2
+          key={`heading-${index}`}
+          className="font-playfair text-[28px] font-normal leading-[110%] text-[#333333]"
+        >
+          {block.text}
+        </h2>
+      );
+    case "paragraph":
+      return (
+        <p key={`paragraph-${index}`} className="font-open-sans text-base leading-[1.7] text-[#333333]">
+          {block.text}
+        </p>
+      );
+    case "quote":
+      return (
+        <blockquote key={`quote-${index}`} className="border-l-4 border-[#114b5f] pl-5">
+          <p className="font-playfair text-xl leading-[1.6] text-[#114b5f]">{block.text}</p>
+          {block.author && (
+            <cite className="mt-2 block font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
+              {block.author}
+            </cite>
+          )}
+        </blockquote>
+      );
+    case "list":
+      return (
+        <ul key={`list-${index}`} className="ml-5 list-disc space-y-2">
+          {block.items.map((item) => (
+            <li key={item} className="font-open-sans text-base leading-[1.7] text-[#333333]">
+              {item}
+            </li>
+          ))}
+        </ul>
+      );
+    case "banner":
+      return (
+        <div key={`banner-${index}`} className="flex w-full justify-center">
+          <PromoBanner
+            title="[AdSense Rectangle • Desktop 300x250 • Banner #2]"
+            variant="vertical"
+            width={300}
+            height={250}
+          />
+        </div>
+      );
+    default:
+      return null;
+  }
+};
+
+const getArticleImage = (
+  article: ArticleResponse | typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number],
+): string => {
+  if ("heroImage" in article && article.heroImage) {
+    return article.heroImage;
+  }
+  if ("coverImage" in article && article.coverImage) {
+    return article.coverImage;
+  }
+  if ("image" in article && article.image) {
+    return article.image;
+  }
+  return "/images/hero_bg.webp";
+};
+
+type NormalizedArticle = {
+  slug: string;
+  title: string;
+  excerpt?: string;
+  categoryId: string;
+  publishedAt?: string;
+  readTime?: string;
+  content: ArticleResponse["content"];
+};
+
+const normalizeArticle = (
+  article: ArticleResponse | typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number],
+): NormalizedArticle => {
+  if ("content" in article && Array.isArray(article.content)) {
+    return {
+      slug: "slug" in article ? article.slug : article.id,
+      title: article.title,
+      excerpt: article.excerpt,
+      categoryId: article.categoryId,
+      publishedAt: article.publishedAt,
+      readTime: article.readTime,
+      content: article.content,
+    };
+  }
+  
+  // Для базовых статей без контента создаем минимальную версию
+  return {
+    slug: article.id,
+    title: article.title,
+    excerpt: article.excerpt,
+    categoryId: article.categoryId,
+    publishedAt: article.publishedAt,
+    readTime: article.readTime,
+    content: [
+      {
+        type: "paragraph",
+        text: article.excerpt || "Содержание статьи будет добавлено позже.",
+      },
+    ],
+  };
+};
+
+export default async function ArticlePage({ params }: ArticlePageProps) {
+  const { slug } = await params;
+  const articleFromApi = await fetchArticleFromApi(slug);
+  const mockArticle = allMocksMap.get(slug);
+  
+  // Если статья из API - используем её, иначе ищем в моках
+  let article: ArticleResponse | typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number] | null = articleFromApi;
+  
+  if (!article && mockArticle) {
+    article = mockArticle;
+  }
+
+  if (!article) {
+    notFound();
+  }
+
+  const normalizedArticle = normalizeArticle(article);
+  const category = categoriesMap[normalizedArticle.categoryId];
+
+  return (
+    <div className="flex min-h-screen w-full flex-col items-start bg-white">
+      <SiteHeader />
+
+      <main className="w-full bg-white">
+        <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[80px] px-4 py-16 max-[400px]:max-w-[340px] max-[400px]:px-[10px] lg:gap-[60px]">
+          <div className="flex flex-col gap-[40px] lg:flex-row lg:items-start lg:gap-[60px]">
+            <article className="flex w-full flex-1 flex-col gap-[32px]">
+              <div className="flex flex-col gap-5">
+                <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#114b5f]">
+                  {category?.title ?? "Article"}
+                </span>
+                <h1 className="font-playfair text-[40px] font-normal leading-[110%] text-[#333333]">
+                  {normalizedArticle.title}
+                </h1>
+                <div className="flex flex-wrap items-center gap-4 font-open-sans text-sm text-[#767676]">
+                  {normalizedArticle.publishedAt && (
+                    <span>{new Date(normalizedArticle.publishedAt).toLocaleDateString()}</span>
+                  )}
+                  {normalizedArticle.publishedAt && normalizedArticle.readTime && <span>•</span>}
+                  {normalizedArticle.readTime && <span>{normalizedArticle.readTime}</span>}
+                </div>
+              </div>
+
+              <div className="relative h-[420px] w-full overflow-hidden">
+                <Image
+                  src={getArticleImage(article)}
+                  fill
+                  sizes="(min-width: 1024px) 720px, 100vw"
+                  className="object-cover object-center"
+                  alt={normalizedArticle.title}
+                  priority
+                />
+              </div>
+
+              <div className="flex flex-col gap-8">
+                {normalizedArticle.content.map((block, index) => renderContentBlock(block, index))}
+              </div>
+            </article>
+
+            <aside className="flex w-full flex-col items-center gap-10 lg:w-[320px] lg:items-start">
+              <PromoBanner
+                title="[AdSense Rectangle • Desktop 300x250 • Banner #2]"
+                variant="vertical"
+                width={300}
+                height={250}
+              />
+              <PromoBanner
+                title="[(300x600) • Banner]"
+                variant="vertical"
+                width={300}
+                height={600}
+              />
+            </aside>
+          </div>
+
+          <div className="w-full">
+            <PromoBanner
+              title="[AdSense Adaptive • Desktop (728x90) • Banner #1]"
+              width="100%"
+              height={90}
+            />
+          </div>
+        </div>
+      </main>
+
+      <SiteFooter />
+    </div>
+  );
+}
