@@ -1,10 +1,11 @@
 const express = require("express");
-const { pool } = require("../db");
+const { getPool } = require("../db");
 
 const router = express.Router();
 
 router.get("/", async (_req, res) => {
   try {
+    const pool = getPool();
     const result = await pool.query(
       `SELECT slug, title, excerpt, hero_image AS "heroImage", category_id AS "categoryId", author_name AS "authorName", read_time AS "readTime", published_at AS "publishedAt" FROM articles ORDER BY published_at DESC`,
     );
@@ -18,6 +19,7 @@ router.get("/", async (_req, res) => {
 router.get("/:slug", async (req, res) => {
   const { slug } = req.params;
   try {
+    const pool = getPool();
     const result = await pool.query(
       `SELECT slug, title, excerpt, hero_image AS "heroImage", category_id AS "categoryId", author_name AS "authorName", read_time AS "readTime", published_at AS "publishedAt", content FROM articles WHERE slug = $1 LIMIT 1`,
       [slug],
@@ -54,6 +56,7 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    const pool = getPool();
     const result = await pool.query(
       `INSERT INTO articles (slug, title, excerpt, hero_image, category_id, author_name, read_time, published_at, content)
        VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()), $9)

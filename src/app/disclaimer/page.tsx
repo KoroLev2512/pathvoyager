@@ -47,10 +47,11 @@ const sections = [
 
 export default function Disclaimer() {
   return (
-    <div className="flex min-h-screen w-full flex-col items-start bg-white">
-      <SiteHeader />
+    <div className="flex min-h-screen w-full flex-col bg-white">
+      <div className="flex-1">
+        <SiteHeader />
 
-      <main className="w-full bg-white">
+        <main className="w-full bg-white">
         <div className="mx-auto flex w-full max-w-[960px] flex-col gap-[40px] px-4 py-16 max-[400px]:max-w-[340px] max-[400px]:px-[10px]">
           <header className="flex flex-col gap-5">
             <h1 className="font-playfair text-[32px] font-normal leading-[110%] text-[#333333] text-center">
@@ -81,14 +82,14 @@ export default function Disclaimer() {
         </div>
       </main>
 
-      <div className="mx-auto w-full max-w-[960px] px-4 max-[400px]:max-w-[340px] max-[400px]:px-[10px]">
-        <PromoBanner
-          title="[AdSense Adaptive • Desktop (728x90) • Banner #1]"
-          width="100%"
-          height={90}
-        />
+        <div className="mx-auto w-full max-w-[960px] px-4 max-[400px]:max-w-[340px] max-[400px]:px-[10px]">
+          <PromoBanner
+            title="[AdSense Adaptive • Desktop (728x90) • Banner #1]"
+            width="100%"
+            height={90}
+          />
+        </div>
       </div>
-
       <SiteFooter />
     </div>
   );

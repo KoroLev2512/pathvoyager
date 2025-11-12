@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
@@ -29,6 +30,66 @@ articleDetailsMocks.forEach((article) => {
 type ArticlePageProps = {
   params: Promise<{ slug: string }>;
 };
+
+export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const articleFromApi = await fetchArticleFromApi(slug);
+  const mockArticle = allMocksMap.get(slug);
+
+  let article: ArticleResponse | typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number] | null = articleFromApi;
+
+  if (!article && mockArticle) {
+    article = mockArticle;
+  }
+
+  if (!article) {
+    return {
+      title: "Article Not Found",
+    };
+  }
+
+  const normalizedArticle = normalizeArticle(article, slug);
+  const category = categoriesMap[normalizedArticle.categoryId];
+  const imageUrl = getArticleImage(article);
+
+  return {
+    title: normalizedArticle.title,
+    description: normalizedArticle.excerpt || `${normalizedArticle.title} - Expert travel guide from PathVoyager.`,
+    keywords: [
+      normalizedArticle.title.toLowerCase(),
+      category?.title.toLowerCase() || "",
+      "travel guide",
+      "travel tips",
+      "travel article",
+    ].filter(Boolean),
+    authors: normalizedArticle.authorName ? [{ name: normalizedArticle.authorName }] : undefined,
+    openGraph: {
+      title: normalizedArticle.title,
+      description: normalizedArticle.excerpt || `${normalizedArticle.title} - Expert travel guide.`,
+      url: `https://pathvoyager.com/posts/${slug}`,
+      type: "article",
+      publishedTime: normalizedArticle.publishedAt,
+      authors: normalizedArticle.authorName ? [normalizedArticle.authorName] : undefined,
+      images: [
+        {
+          url: imageUrl.startsWith("http") ? imageUrl : `https://pathvoyager.com${imageUrl}`,
+          width: 1200,
+          height: 630,
+          alt: normalizedArticle.title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: normalizedArticle.title,
+      description: normalizedArticle.excerpt || `${normalizedArticle.title} - Expert travel guide.`,
+      images: [imageUrl.startsWith("http") ? imageUrl : `https://pathvoyager.com${imageUrl}`],
+    },
+    alternates: {
+      canonical: `https://pathvoyager.com/posts/${slug}`,
+    },
+  };
+}
 
 type ArticleResponse = {
   slug: string;
@@ -164,32 +225,37 @@ type NormalizedArticle = {
   categoryId: string;
   publishedAt?: string;
   readTime?: string;
+  authorName?: string;
   content: ArticleResponse["content"];
 };
 
 const normalizeArticle = (
   article: ArticleResponse | typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number],
+  fallbackSlug: string,
 ): NormalizedArticle => {
   if ("content" in article && Array.isArray(article.content)) {
+    const resolvedSlug = "slug" in article ? article.slug : "id" in article ? article.id : fallbackSlug;
     return {
-      slug: "slug" in article ? article.slug : article.id,
+      slug: resolvedSlug,
       title: article.title,
       excerpt: article.excerpt,
       categoryId: article.categoryId,
       publishedAt: article.publishedAt,
       readTime: article.readTime,
+      authorName: "authorName" in article ? article.authorName : undefined,
       content: article.content,
     };
   }
   
   // Для базовых статей без контента создаем минимальную версию
   return {
-    slug: article.id,
+    slug: "id" in article ? article.id : fallbackSlug,
     title: article.title,
     excerpt: article.excerpt,
     categoryId: article.categoryId,
     publishedAt: article.publishedAt,
     readTime: article.readTime,
+    authorName: "authorName" in article ? article.authorName : undefined,
     content: [
       {
         type: "paragraph",
@@ -215,14 +281,60 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     notFound();
   }
 
-  const normalizedArticle = normalizeArticle(article);
+  const normalizedArticle = normalizeArticle(article, slug);
   const category = categoriesMap[normalizedArticle.categoryId];
+  const imageUrl = getArticleImage(article);
+  const fullImageUrl = imageUrl.startsWith("http") ? imageUrl : `https://pathvoyager.com${imageUrl}`;
+
+  // Структурированные данные для SEO (JSON-LD)
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: normalizedArticle.title,
+    description: normalizedArticle.excerpt || normalizedArticle.title,
+    image: fullImageUrl,
+    datePublished: normalizedArticle.publishedAt || new Date().toISOString(),
+    dateModified: normalizedArticle.publishedAt || new Date().toISOString(),
+    author: normalizedArticle.authorName
+      ? {
+          "@type": "Person",
+          name: normalizedArticle.authorName,
+        }
+      : {
+          "@type": "Organization",
+          name: "PathVoyager",
+        },
+    publisher: {
+      "@type": "Organization",
+      name: "PathVoyager",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://pathvoyager.com/images/hero_bg.webp",
+      },
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": `https://pathvoyager.com/posts/${slug}`,
+    },
+    articleSection: category?.title || "Travel",
+    keywords: [
+      normalizedArticle.title,
+      category?.title || "",
+      "travel guide",
+      "travel tips",
+    ].filter(Boolean),
+  };
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-start bg-white">
-      <SiteHeader />
+    <div className="flex min-h-screen w-full flex-col bg-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <div className="flex-1">
+        <SiteHeader />
 
-      <main className="w-full bg-white">
+        <main className="w-full bg-white">
         <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[80px] px-4 py-16 max-[400px]:max-w-[340px] max-[400px]:px-[10px] lg:gap-[60px]">
           <div className="flex flex-col gap-[40px] lg:flex-row lg:items-start lg:gap-[60px]">
             <article className="flex w-full flex-1 flex-col gap-[32px]">
@@ -283,7 +395,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           </div>
         </div>
       </main>
-
+      </div>
       <SiteFooter />
     </div>
   );

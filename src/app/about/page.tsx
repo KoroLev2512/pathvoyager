@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
@@ -5,6 +6,37 @@ import { AboutBanner } from "@/widgets/about-banner/ui/AboutBanner";
 import { RecentPostsSection } from "@/widgets/recent-posts/ui/RecentPostsSection";
 import { PromoBanner } from "@/shared/ui/PromoBanner";
 import { aboutPageAuthors } from "@/shared/mocks/authors";
+
+export const metadata: Metadata = {
+  title: "About Us",
+  description:
+    "Meet the PathVoyager team of travel experts: digital nomads, slow travel enthusiasts, cultural immersion specialists, and luxury travel advisors sharing their stories and expertise.",
+  keywords: [
+    "about pathvoyager",
+    "travel writers",
+    "travel experts",
+    "travel team",
+    "travel authors",
+    "digital nomad experts",
+  ],
+  openGraph: {
+    title: "About Us | PathVoyager",
+    description:
+      "Meet the PathVoyager team of travel experts sharing their stories and expertise from around the globe.",
+    url: "https://pathvoyager.com/about",
+    images: [
+      {
+        url: "/images/hero_bg.webp",
+        width: 1200,
+        height: 630,
+        alt: "PathVoyager Team",
+      },
+    ],
+  },
+  alternates: {
+    canonical: "https://pathvoyager.com/about",
+  },
+};
 
 const AuthorCard = ({
   author,
@@ -44,10 +76,30 @@ const AuthorCard = ({
 };
 
 export default function About() {
+  const aboutPageJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    name: "About PathVoyager",
+    description:
+      "Meet the PathVoyager team of travel experts: digital nomads, slow travel enthusiasts, cultural immersion specialists, and luxury travel advisors.",
+    url: "https://pathvoyager.com/about",
+    mainEntity: {
+      "@type": "Organization",
+      name: "PathVoyager",
+      description:
+        "Your ultimate travel guide with expert tips, itineraries, and travel stories from around the globe.",
+    },
+  };
+
   return (
-    <div className="flex min-h-screen w-full flex-col items-start bg-white">
-      <SiteHeader />
-      <AboutBanner />
+    <div className="flex min-h-screen w-full flex-col bg-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(aboutPageJsonLd) }}
+      />
+      <div className="flex-1">
+        <SiteHeader />
+        <AboutBanner />
 
       <div className="w-full bg-white">
         <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[40px] px-4 py-10 max-[400px]:max-w-[340px] max-[400px]:gap-[60px] max-[400px]:px-[10px]">
@@ -136,6 +188,7 @@ export default function About() {
       </div>
 
       <RecentPostsSection />
+      </div>
       <SiteFooter />
     </div>
   );

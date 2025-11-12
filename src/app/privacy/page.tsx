@@ -6,10 +6,11 @@ import { PromoBanner } from "@/shared/ui/PromoBanner";
 
 export default function Privacy() {
   return (
-    <div className="flex min-h-screen w-full flex-col items-start bg-white">
-      <SiteHeader />
+    <div className="flex min-h-screen w-full flex-col bg-white">
+      <div className="flex-1">
+        <SiteHeader />
 
-      <main className="w-full bg-white">
+        <main className="w-full bg-white">
         <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[80px] px-4 py-16 max-[400px]:max-w-[340px] max-[400px]:px-[10px] lg:gap-[60px]">
           <div className="flex flex-col items-center gap-[40px] lg:flex-row lg:items-start lg:gap-[60px]">
             <article className="flex w-full flex-1 flex-col gap-[40px]">
@@ -188,7 +189,7 @@ export default function Privacy() {
           </div>
         </div>
       </main>
-
+      </div>
       <SiteFooter />
     </div>
   );

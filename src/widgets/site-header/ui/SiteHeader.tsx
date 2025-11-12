@@ -86,7 +86,7 @@ export const SiteHeader = () => {
 
       {/* Mobile Menu Overlay - плавное появление */}
       <div
-        className={`fixed inset-x-0 top-[100px] bottom-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 ${
+        className={`fixed inset-x-0 top-[100px] bottom-0 bg-black/50 z-40 md:hidden transition-opacity duration-300 cursor-pointer ${
           isMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setIsMenuOpen(false)}

@@ -9,10 +9,11 @@ import { categoriesWithDetails } from "@/shared/mocks/categories";
 
 export default function Categories() {
   return (
-    <div className="flex min-h-screen w-full flex-col items-start bg-white">
-      <SiteHeader />
-      <CategoriesBanner />
-      <div className="relative w-full bg-white">
+    <div className="flex min-h-screen w-full flex-col bg-white">
+      <div className="flex-1">
+        <SiteHeader />
+        <CategoriesBanner />
+        <div className="relative w-full bg-white">
         <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[40px] px-4 py-10 max-[400px]:max-w-[340px] max-[400px]:gap-[60px] max-[400px]:px-[10px]">
           {/* First and second categories with sidebar banner */}
           <div className="flex flex-col gap-5 max-[400px]:gap-5 lg:flex-row lg:gap-5 lg:justify-between">
@@ -218,6 +219,7 @@ export default function Categories() {
         </div>
       </div>
       <RecentPostsSection />
+      </div>
       <SiteFooter />
     </div>
   );
