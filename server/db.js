@@ -1,98 +1,64 @@
-const { Pool } = require("pg");
-
-const connectionString = process.env.DATABASE_URL;
+const mysql = require("mysql2/promise");
 
 const getDbConfig = () => {
-  if (connectionString) {
+  // Поддержка DATABASE_URL для совместимости
+  if (process.env.DATABASE_URL) {
+    const url = new URL(process.env.DATABASE_URL);
     return {
-      connectionString,
-      ssl:
-        process.env.PGSSLMODE === "require"
-          ? { rejectUnauthorized: false }
-          : process.env.PGSSLMODE
-          ? false
-          : undefined,
+      host: url.hostname,
+      port: url.port ? Number(url.port) : 3306,
+      user: url.username,
+      password: url.password,
+      database: url.pathname.slice(1),
     };
   }
+
   return {
-    host: process.env.PGHOST || "localhost",
-    port: process.env.PGPORT ? Number(process.env.PGPORT) : 5432,
-    user: process.env.PGUSER || "postgres",
-    password: process.env.PGPASSWORD || "postgres",
-    database: process.env.PGDATABASE || "pathvoyager",
+    host: process.env.DB_HOST || process.env.MYSQL_HOST || "localhost",
+    port: process.env.DB_PORT || process.env.MYSQL_PORT ? Number(process.env.DB_PORT || process.env.MYSQL_PORT) : 3306,
+    user: process.env.DB_USER || process.env.MYSQL_USER || "admin",
+    password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || "aboba-2512",
+    database: process.env.DB_NAME || process.env.MYSQL_DATABASE || "pathvoyager",
   };
 };
 
 let pool;
 
-async function ensureDatabaseExists() {
-  const dbConfig = getDbConfig();
-  const dbName = connectionString
-    ? new URL(connectionString).pathname.slice(1)
-    : dbConfig.database;
-
-  if (!dbName) {
-    throw new Error("Database name not specified");
-  }
-
-  // Подключаемся к системной базе данных postgres для создания базы данных
-  const adminPool = new Pool({
-    host: dbConfig.host || "localhost",
-    port: dbConfig.port || 5432,
-    user: dbConfig.user || "postgres",
-    password: dbConfig.password || "postgres",
-    database: "postgres",
-  });
-
-  try {
-    // Проверяем, существует ли база данных
-    const result = await adminPool.query(
-      "SELECT 1 FROM pg_database WHERE datname = $1",
-      [dbName],
-    );
-
-    if (result.rows.length === 0) {
-      console.log(`Creating database "${dbName}"...`);
-      await adminPool.query(`CREATE DATABASE "${dbName}"`);
-      console.log(`Database "${dbName}" created successfully.`);
-    }
-  } catch (error) {
-    if (error.code === "3D000" || error.message.includes("does not exist")) {
-      throw new Error(
-        `Database "${dbName}" does not exist and could not be created. Please create it manually:\n` +
-          `  psql -U postgres -c "CREATE DATABASE ${dbName};"`,
-      );
-    }
-    throw error;
-  } finally {
-    await adminPool.end();
-  }
-}
-
 async function initialise() {
   try {
-    // Создаем базу данных, если её нет (только для локальной разработки без DATABASE_URL)
-    if (!connectionString) {
-      await ensureDatabaseExists();
-    }
+    const dbConfig = getDbConfig();
 
-    // Создаем пул подключений к нужной базе данных
-    pool = new Pool(getDbConfig());
+    // Создаем пул подключений
+    pool = mysql.createPool({
+      ...dbConfig,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
+    });
+
+    // Проверяем подключение
+    const connection = await pool.getConnection();
+    await connection.ping();
+    connection.release();
 
     // Создаем таблицы
     await pool.query(`
       CREATE TABLE IF NOT EXISTS articles (
-        id SERIAL PRIMARY KEY,
-        slug TEXT UNIQUE NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        slug VARCHAR(255) UNIQUE NOT NULL,
         title TEXT NOT NULL,
         excerpt TEXT,
         hero_image TEXT,
-        category_id TEXT NOT NULL,
-        author_name TEXT,
-        read_time TEXT,
-        published_at TIMESTAMPTZ DEFAULT NOW(),
-        content JSONB NOT NULL
-      );
+        category_id VARCHAR(255) NOT NULL,
+        author_name VARCHAR(255),
+        read_time VARCHAR(50),
+        published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        content JSON NOT NULL,
+        INDEX idx_slug (slug),
+        INDEX idx_published_at (published_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
     console.log("Database tables initialized successfully.");
   } catch (error) {
