@@ -16,9 +16,6 @@ const nextConfig: NextConfig = {
     } : false,
   },
   
-  // SWC minification (already enabled by default in Next.js 16)
-  swcMinify: true,
-  
   // Image optimization
   images: {
     formats: ['image/webp', 'image/avif'],
