@@ -149,7 +149,7 @@ export default function Travel() {
                 return (
                   <div
                     key={item.id}
-                    className="hidden h-full w-full items-start justify-center lg:flex"
+                    className="flex h-full w-full items-start justify-center"
                   >
                     <PromoBanner
                       title="[AdSense Rectangle • Desktop 300x250 • Banner #2]"
