@@ -23,7 +23,12 @@ const categoryOptions = [{ id: "all", title: "All", color: "#333333" }, ...categ
 const categoryMap = Object.fromEntries(categories.map((category) => [category.id, category]));
 
 const ARTICLES_PER_PAGE = 8;
-const BANNER_INSERT_INDEX = 3;
+
+// Функция для генерации фиксированного случайного столбца для баннера (0, 1 или 2)
+const getBannerColumn = (groupIndex: number): number => {
+  const seed = groupIndex * 7919;
+  return seed % 3; // Столбец от 0 до 2 (для индексации массива)
+};
 
 export default function Travel() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -46,15 +51,49 @@ export default function Travel() {
   const articlesWithBanner = useMemo(() => {
     const items: Array<{ type: "post"; id: string } | { type: "banner"; id: string }> = [];
 
-    paginatedArticles.forEach((article, index) => {
-      if (index === BANNER_INSERT_INDEX) {
-        items.push({ type: "banner", id: `banner-${page}` });
+    // Разбиваем статьи на группы по 8
+    const groups: typeof allArticles[] = [];
+    for (let i = 0; i < paginatedArticles.length; i += ARTICLES_PER_PAGE) {
+      groups.push(paginatedArticles.slice(i, i + ARTICLES_PER_PAGE));
+    }
+
+    groups.forEach((group, groupIndex) => {
+      // Получаем фиксированный случайный столбец для баннера (0, 1 или 2)
+      const bannerColumn = getBannerColumn(groupIndex);
+      
+      // Вычисляем позицию в группе, где должен быть баннер, чтобы попасть в нужный столбец
+      // Учитываем текущее количество элементов в items для правильного позиционирования
+      const currentItemsCount = items.length;
+      const targetColumn = bannerColumn;
+      
+      // Находим позицию в группе, которая даст нужный столбец в сетке
+      // Формула: (currentItemsCount + positionInGroup) % 3 === targetColumn
+      let bannerPositionInGroup = -1;
+      for (let pos = 1; pos < group.length; pos++) {
+        if ((currentItemsCount + pos) % 3 === targetColumn) {
+          bannerPositionInGroup = pos;
+          break;
+        }
       }
-      items.push({ type: "post", id: article.id });
+      
+      // Если не нашли подходящую позицию, используем случайную (но не первую и не последнюю)
+      if (bannerPositionInGroup === -1) {
+        const seed = groupIndex * 7919;
+        bannerPositionInGroup = (seed % (group.length - 2)) + 1;
+      }
+
+      group.forEach((article, articleIndex) => {
+        items.push({ type: "post", id: article.id });
+        
+        // Вставляем баннер в позицию, которая попадет в нужный столбец
+        if (articleIndex === bannerPositionInGroup - 1) {
+          items.push({ type: "banner", id: `banner-${groupIndex}-${bannerPositionInGroup}` });
+        }
+      });
     });
 
     return items;
-  }, [paginatedArticles, page]);
+  }, [paginatedArticles]);
 
   const handleCategoryChange = (categoryId: string) => {
     setActiveCategory(categoryId);

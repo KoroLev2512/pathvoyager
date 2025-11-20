@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { popularArticlesMocks } from "@/shared/mocks";
 import { categories } from "@/entities/category/model/data";
 import { PostCard } from "@/entities/post/ui/PostCard";
@@ -50,9 +51,12 @@ export const PopularPostsSection = () => {
             );
           })}
         </div>
-        <p className="font-open-sans text-base leading-[1.4] text-[#767676] text-center w-full">
+        <Link
+          href="/travel"
+          className="text-center font-open-sans text-base text-[#767676] cursor-pointer transition hover:opacity-80"
+        >
           Read more
-        </p>
+        </Link>
         <div className="w-full">
           <PromoBanner
             title="[AdSense Adaptive • Desktop (728x90) • Banner #1]"

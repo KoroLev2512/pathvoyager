@@ -7,7 +7,6 @@ const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
   weight: ["400", "500"],
   display: "swap",
-  preload: true,
 });
 
 const openSans = Open_Sans({
@@ -15,7 +14,6 @@ const openSans = Open_Sans({
   subsets: ["latin"],
   weight: ["400"],
   display: "swap",
-  preload: true,
 });
 
 const inter = Inter({
@@ -23,7 +21,6 @@ const inter = Inter({
   subsets: ["latin"],
   weight: ["400"],
   display: "swap",
-  preload: true,
 });
 
 export const metadata: Metadata = {
