@@ -3,23 +3,43 @@ const { getPool } = require("../db");
 
 const router = express.Router();
 
+// Проверка доступности БД
+const getPoolSafe = () => {
+  try {
+    return getPool();
+  } catch (error) {
+    return null;
+  }
+};
+
 router.get("/", async (_req, res) => {
   try {
-    const pool = getPool();
+    const pool = getPoolSafe();
+    if (!pool) {
+      // В development без БД возвращаем пустой массив
+      console.log("Database pool not available, returning empty array");
+      res.json([]);
+      return;
+    }
     const [rows] = await pool.query(
       `SELECT slug, title, excerpt, hero_image AS heroImage, category_id AS categoryId, author_name AS authorName, read_time AS readTime, published_at AS publishedAt FROM articles ORDER BY published_at DESC`,
     );
     res.json(rows);
   } catch (error) {
     console.error("Failed to fetch articles", error);
-    res.status(500).json({ message: "Failed to fetch articles" });
+    // Возвращаем пустой массив вместо ошибки, чтобы фронтенд не падал
+    res.status(200).json([]);
   }
 });
 
 router.get("/:slug", async (req, res) => {
   const { slug } = req.params;
   try {
-    const pool = getPool();
+    const pool = getPoolSafe();
+    if (!pool) {
+      res.status(404).json({ message: "Article not found" });
+      return;
+    }
     const [rows] = await pool.query(
       `SELECT slug, title, excerpt, hero_image AS heroImage, category_id AS categoryId, author_name AS authorName, read_time AS readTime, published_at AS publishedAt, content FROM articles WHERE slug = ? LIMIT 1`,
       [slug],
@@ -56,7 +76,11 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const pool = getPool();
+    const pool = getPoolSafe();
+    if (!pool) {
+      res.status(503).json({ message: "Database not available. Please install MySQL for development." });
+      return;
+    }
     const [result] = await pool.query(
       `INSERT INTO articles (slug, title, excerpt, hero_image, category_id, author_name, read_time, published_at, content)
        VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), ?)

@@ -112,15 +112,27 @@ type ArticleResponse = {
   >;
 };
 
-const API_BASE_URL = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+// Для серверных компонентов используем относительные пути или переменную окружения
+const getApiBaseUrl = () => {
+  // Если переменная окружения установлена, используем её
+  if (process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+  }
+  // В продакшене используем относительные пути (проксируются через Nginx)
+  // В development можно использовать localhost, но лучше относительные пути
+  return "";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const fetchArticleFromApi = async (slug: string): Promise<ArticleResponse | null> => {
-  if (!API_BASE_URL) {
-    return null;
-  }
-
   try {
-    const response = await fetch(`${API_BASE_URL}/api/articles/${slug}`, {
+    // Используем относительный путь, если API_BASE_URL пустой
+    const url = API_BASE_URL 
+      ? `${API_BASE_URL}/api/articles/${slug}`
+      : `/api/articles/${slug}`;
+    
+    const response = await fetch(url, {
       next: { revalidate: 0 },
     });
 

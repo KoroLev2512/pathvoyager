@@ -5,8 +5,11 @@ import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
 import { categories } from "@/entities/category/model/data";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || "http://localhost:4000";
+// Всегда подключаемся к бэкенду на продакшен сервере
+const getApiBaseUrl = (): string => {
+  // Используем полный URL продакшена для подключения к бэкенду на сервере
+  return "https://pathvoyager.com";
+};
 
 const ADMIN_LOGIN = "admin";
 const ADMIN_PASSWORD = "aboba-2512";
@@ -120,7 +123,9 @@ export default function AdminPage() {
         if (!isAuthenticated) {
           return;
         }
-        const response = await fetch(`${API_BASE_URL}/api/articles`);
+        const apiBaseUrl = getApiBaseUrl();
+        const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error("Failed to load articles");
         }
@@ -146,7 +151,9 @@ export default function AdminPage() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/articles`, {
+      const apiBaseUrl = getApiBaseUrl();
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,7 +177,9 @@ export default function AdminPage() {
       setMessage(`Статья сохранена. Ссылка: /posts/${slug}`);
       setForm(initialForm);
 
-      const updatedArticles = await fetch(`${API_BASE_URL}/api/articles`).then((res) => res.json());
+      // Используем ту же переменную apiBaseUrl, которая уже определена выше
+      const refreshUrl = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+      const updatedArticles = await fetch(refreshUrl).then((res) => res.json());
       setArticles(updatedArticles);
     } catch (err) {
       console.error(err);
@@ -224,10 +233,12 @@ export default function AdminPage() {
                     Логин
                   </span>
                   <input
+                    type="text"
+                    autoComplete="username"
                     value={login}
                     onChange={(event) => setLogin(event.target.value)}
                     className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
-                    placeholder="admin"
+                    placeholder="Введите логин"
                   />
                 </label>
                 <label className="flex flex-col gap-2">
@@ -236,10 +247,11 @@ export default function AdminPage() {
                   </span>
                   <input
                     type="password"
+                    autoComplete="current-password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
-                    placeholder="Пароль"
+                    placeholder="Введите пароль"
                   />
                 </label>
                 {authError && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Logo } from "@/shared/ui/Logo";
 import { BurgerIcon } from "@/shared/icons";
 
@@ -13,6 +14,7 @@ const navigation = [
 
 export const SiteHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const pathname = usePathname();
 
   // Prevent body scroll when menu is open
   useEffect(() => {
@@ -47,7 +49,7 @@ export const SiteHeader = () => {
       <header className="relative h-[100px] w-full bg-white z-50">
         <div className="relative h-full w-full">
           {/* Logo - centered on mobile, positioned on desktop */}
-          <div className="absolute left-1/2 top-[35px] -translate-x-1/2 md:left-6 md:-translate-x-0 lg:left-[calc(50%+0.461px)] lg:top-8 lg:-translate-x-1/2">
+          <div className="absolute top-[33px] left-[16px] md:left-6 md:-translate-x-0 lg:left-[calc(50%+0.461px)] lg:top-8 lg:-translate-x-1/2">
             <Link href="/" className="block" onClick={handleLinkClick}>
               <div className="w-[169px] h-[36px] max-[400px]:w-[110.371px] max-[400px]:h-[16.834px] md:w-[169px] md:h-[36px]">
                 <Logo 
@@ -60,15 +62,20 @@ export const SiteHeader = () => {
 
           {/* Desktop Navigation */}
           <nav className="absolute right-[60px] top-1/2 -translate-y-1/2 hidden md:flex items-center gap-[30px]">
-            {navigation.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="font-open-sans text-base font-normal leading-[1.4] text-[#333333] text-center whitespace-nowrap transition hover:opacity-80"
-              >
-                {item.title}
-              </Link>
-            ))}
+            {navigation.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`font-open-sans text-base font-normal leading-[1.4] text-[#333333] text-center whitespace-nowrap transition hover:opacity-80 ${
+                    isActive ? "underline underline-offset-4" : ""
+                  }`}
+                >
+                  {item.title}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Mobile Burger Button */}
@@ -103,16 +110,21 @@ export const SiteHeader = () => {
       >
         <div className="flex flex-col h-full">
           <nav className="flex flex-col gap-[40px] px-5 py-10">
-            {navigation.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={handleLinkClick}
-                className="font-open-sans text-base font-normal leading-[1.4] text-[#333333] text-center whitespace-nowrap transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#114b5f] focus:ring-offset-2 rounded px-2 py-1"
-              >
-                {item.title}
-              </Link>
-            ))}
+            {navigation.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={handleLinkClick}
+                  className={`font-open-sans text-base font-normal leading-[1.4] text-[#333333] text-center whitespace-nowrap transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#114b5f] focus:ring-offset-2 rounded px-2 py-1 ${
+                    isActive ? "underline underline-offset-4" : ""
+                  }`}
+                >
+                  {item.title}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </aside>

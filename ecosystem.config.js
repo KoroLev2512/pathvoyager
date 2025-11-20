@@ -8,6 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 4000,
+        SOCKET_PATH: '/var/www/clo/data/nodejs/1.sock',
       },
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
