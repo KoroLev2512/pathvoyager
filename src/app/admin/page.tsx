@@ -5,9 +5,26 @@ import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
 import { categories } from "@/entities/category/model/data";
 
-// Всегда подключаемся к бэкенду на продакшен сервере
+// Определяем базовый URL API в зависимости от окружения
 const getApiBaseUrl = (): string => {
-  // Используем полный URL продакшена для подключения к бэкенду на сервере
+  // В клиентском компоненте проверяем hostname для определения окружения
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    
+    // В локальной разработке используем относительные пути (проксируются через Next.js rewrites)
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "";
+    }
+    
+    // Если переменная окружения установлена, используем её (для кастомных конфигураций)
+    // В Next.js переменные NEXT_PUBLIC_* заменяются на этапе сборки
+    const envApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (envApiUrl) {
+      return envApiUrl;
+    }
+  }
+  
+  // В продакшене используем полный URL
   return "https://pathvoyager.com";
 };
 

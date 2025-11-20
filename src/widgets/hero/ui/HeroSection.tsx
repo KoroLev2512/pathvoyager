@@ -11,6 +11,7 @@ export const HeroSection = () => {
           alt="Travel background"
           className="object-cover object-center"
           priority
+          fetchPriority="high"
         />
       </div>
       <div className="absolute left-1/2 top-1/2 flex w-[90%] max-w-[985px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-3 px-4 text-center text-[#114b5f] sm:gap-4 md:gap-5 md:-translate-y-[150px]">

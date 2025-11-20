@@ -50,7 +50,13 @@ export const SiteHeader = () => {
         <div className="relative h-full w-full">
           {/* Logo - centered on mobile, positioned on desktop */}
           <div className="absolute top-[33px] left-[16px] md:left-6 md:-translate-x-0 lg:left-[calc(50%+0.461px)] lg:top-8 lg:-translate-x-1/2">
-            <Link href="/" className="block" onClick={handleLinkClick}>
+            <Link 
+              href="/" 
+              className="block" 
+              onClick={handleLinkClick}
+              aria-label="PathVoyager - Go to homepage"
+            >
+              <span className="sr-only">PathVoyager - Go to homepage</span>
               <div className="w-[169px] h-[36px] max-[400px]:w-[110.371px] max-[400px]:h-[16.834px] md:w-[169px] md:h-[36px]">
                 <Logo 
                   width={169} 
