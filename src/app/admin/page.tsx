@@ -127,7 +127,8 @@ export default function AdminPage() {
         const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
         const response = await fetch(url);
         if (!response.ok) {
-          throw new Error("Failed to load articles");
+          setError("Не удалось загрузить статьи. Убедитесь, что запущен бэкенд.");
+          return;
         }
         const data = await response.json();
         setArticles(data);
@@ -195,7 +196,9 @@ export default function AdminPage() {
         } catch {
           errorMessage = `Ошибка ${response.status}: ${response.statusText}`;
         }
-        throw new Error(errorMessage);
+        setError(errorMessage);
+        setIsSubmitting(false);
+        return;
       }
 
       const { slug } = await response.json();
