@@ -1,0 +1,16 @@
+# Поддержка современных браузеров (последние 2 версии основных браузеров)
+# Это позволит убрать полифиллы для современных функций JavaScript
+
+# Chrome, Firefox, Safari, Edge (последние 2 версии)
+last 2 Chrome versions
+last 2 Firefox versions
+last 2 Safari versions
+last 2 Edge versions
+
+# iOS Safari (последние 2 версии)
+last 2 iOS versions
+
+# Не поддерживаем IE и старые версии
+not dead
+not IE 11
+
