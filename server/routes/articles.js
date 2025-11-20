@@ -58,6 +58,9 @@ router.get("/:slug", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
+  console.log("POST /api/articles - Request received");
+  console.log("Body:", JSON.stringify(req.body, null, 2));
+  
   const {
     slug,
     title,
@@ -71,6 +74,7 @@ router.post("/", async (req, res) => {
   } = req.body;
 
   if (!slug || !title || !categoryId || !content) {
+    console.log("Validation failed - missing required fields");
     res.status(400).json({ message: "slug, title, categoryId and content are required" });
     return;
   }
@@ -78,9 +82,25 @@ router.post("/", async (req, res) => {
   try {
     const pool = getPoolSafe();
     if (!pool) {
+      console.log("Database pool not available");
       res.status(503).json({ message: "Database not available. Please install MySQL for development." });
       return;
     }
+    console.log("Attempting to save article to database...");
+    
+    // Преобразуем дату в формат MySQL (YYYY-MM-DD HH:MM:SS)
+    let mysqlDate = null;
+    if (publishedAt) {
+      try {
+        const date = new Date(publishedAt);
+        // Форматируем дату для MySQL: YYYY-MM-DD HH:MM:SS
+        mysqlDate = date.toISOString().slice(0, 19).replace('T', ' ');
+      } catch (error) {
+        console.error("Error parsing date:", error);
+        mysqlDate = null;
+      }
+    }
+    
     const [result] = await pool.query(
       `INSERT INTO articles (slug, title, excerpt, hero_image, category_id, author_name, read_time, published_at, content)
        VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), ?)
@@ -101,7 +121,7 @@ router.post("/", async (req, res) => {
         categoryId,
         authorName ?? null,
         readTime ?? null,
-        publishedAt ?? null,
+        mysqlDate,
         JSON.stringify(content),
       ],
     );
@@ -109,7 +129,12 @@ router.post("/", async (req, res) => {
     res.status(201).json({ slug });
   } catch (error) {
     console.error("Failed to save article", error);
-    res.status(500).json({ message: "Failed to save article" });
+    // Возвращаем более детальное сообщение об ошибке
+    const errorMessage = error.message || "Failed to save article";
+    res.status(500).json({ 
+      message: errorMessage,
+      error: process.env.NODE_ENV === "development" ? error.stack : undefined
+    });
   }
 });
 

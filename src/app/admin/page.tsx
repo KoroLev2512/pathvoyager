@@ -153,24 +153,49 @@ export default function AdminPage() {
     try {
       const apiBaseUrl = getApiBaseUrl();
       const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: form.slug,
-          title: form.title,
-          excerpt: form.excerpt,
-          heroImage: form.heroImage || null,
-          categoryId: form.categoryId,
-          authorName: form.authorName || null,
-          readTime: form.readTime || null,
-          publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
-          content: parseContent(form.contentRaw),
-        }),
-      });
+      
+      console.log("Sending POST request to:", url);
+      
+      const requestBody = {
+        slug: form.slug,
+        title: form.title,
+        excerpt: form.excerpt,
+        heroImage: form.heroImage || null,
+        categoryId: form.categoryId,
+        authorName: form.authorName || null,
+        readTime: form.readTime || null,
+        publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
+        content: parseContent(form.contentRaw),
+      };
+      
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+      } catch (fetchError) {
+        // Обработка сетевых ошибок (CORS, таймаут, и т.д.)
+        console.error("Fetch error:", fetchError);
+        const errorMessage = fetchError instanceof Error 
+          ? `Не удалось подключиться к серверу: ${fetchError.message}`
+          : "Не удалось подключиться к серверу";
+        setError(errorMessage);
+        setIsSubmitting(false);
+        return;
+      }
 
       if (!response.ok) {
-        throw new Error("Ошибка при сохранении статьи");
+        // Пытаемся получить детали ошибки от сервера
+        let errorMessage = "Ошибка при сохранении статьи";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          errorMessage = `Ошибка ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const { slug } = await response.json();
@@ -182,8 +207,15 @@ export default function AdminPage() {
       const updatedArticles = await fetch(refreshUrl).then((res) => res.json());
       setArticles(updatedArticles);
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Неизвестная ошибка");
+      console.error("Error saving article:", err);
+      // Показываем более детальное сообщение об ошибке
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (typeof err === "string") {
+        setError(err);
+      } else {
+        setError("Не удалось сохранить статью. Проверьте подключение к серверу.");
+      }
     } finally {
       setIsSubmitting(false);
     }
