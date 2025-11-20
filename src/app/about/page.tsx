@@ -100,8 +100,7 @@ export default function About() {
       <div className="flex-1">
         <SiteHeader />
         <AboutBanner />
-
-      <div className="w-full bg-white">
+        <main className="w-full bg-white">
         <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[40px] px-4 py-10 max-[400px]:max-w-[340px] max-[400px]:gap-[60px] max-[400px]:px-[10px]">
           {/* Our authors section with image */}
           <div className="flex flex-col-reverse gap-10 md:flex-row md:items-center md:gap-[100px]">
@@ -185,9 +184,8 @@ export default function About() {
             </div>
           </div>
         </div>
-      </div>
-
-      <RecentPostsSection />
+        <RecentPostsSection />
+      </main>
       </div>
       <SiteFooter />
     </div>

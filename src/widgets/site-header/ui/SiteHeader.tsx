@@ -123,6 +123,7 @@ export const SiteHeader = () => {
                   key={item.href}
                   href={item.href}
                   onClick={handleLinkClick}
+                  tabIndex={isMenuOpen ? undefined : -1}
                   className={`font-open-sans text-base font-normal leading-[1.4] text-[#333333] text-center whitespace-nowrap transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#114b5f] focus:ring-offset-2 rounded px-2 py-1 ${
                     isActive ? "underline underline-offset-4" : ""
                   }`}

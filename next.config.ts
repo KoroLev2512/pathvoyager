@@ -8,6 +8,17 @@ const nextConfig: NextConfig = {
   // Output configuration
   output: 'standalone',
   
+  // Compiler optimizations for modern browsers
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  
+  // SWC minification (already enabled by default in Next.js 16)
+  swcMinify: true,
+  
   // Image optimization
   images: {
     formats: ['image/webp', 'image/avif'],

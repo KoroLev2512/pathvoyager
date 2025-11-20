@@ -72,9 +72,11 @@ export default function Home() {
       />
       <div className="flex-1">
         <SiteHeader />
-        <HeroSection />
-        <PopularPostsSection />
-        <RecentPostsSection />
+        <main>
+          <HeroSection />
+          <PopularPostsSection />
+          <RecentPostsSection />
+        </main>
       </div>
       <SiteFooter />
     </div>
