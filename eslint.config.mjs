@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Server files use CommonJS require() which is normal for Node.js
+    "server/**",
   ]),
 ]);
 

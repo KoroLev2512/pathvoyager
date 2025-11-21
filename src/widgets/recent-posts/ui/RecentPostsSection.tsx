@@ -1,42 +1,98 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { recentArticlesMocks, popularArticlesMocks } from "@/shared/mocks";
 import { categories } from "@/entities/category/model/data";
 import { PostCard } from "@/entities/post/ui/PostCard";
 import { PromoBanner } from "@/shared/ui/PromoBanner";
+import { transformBackendArticle, type BackendArticle } from "@/entities/post/lib/transformArticle";
+import type { Post } from "@/entities/post/model/types";
 
 const categoriesMap = Object.fromEntries(
   categories.map((category) => [category.id, category]),
 );
 
-// Объединяем все статьи и сортируем по убыванию новизны
-const articlesMap = new Map(
-  [...popularArticlesMocks, ...recentArticlesMocks].map((article) => [article.id, article]),
-);
-
-const allArticles = Array.from(articlesMap.values()).sort((a, b) => {
-  const dateA = new Date(a.publishedAt).getTime();
-  const dateB = new Date(b.publishedAt).getTime();
-  return dateB - dateA;
-});
-
 const ARTICLES_PER_PAGE = 5;
+
+// Функция для генерации фиксированного случайного столбца для баннера (0, 1 или 2)
+const getBannerColumn = (groupIndex: number): number => {
+  const seed = groupIndex * 7919;
+  return seed % 3; // Столбец от 0 до 2 (для индексации массива)
+};
+
+// Определяем базовый URL API в зависимости от окружения
+const getApiBaseUrl = (): string => {
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    
+    // В локальной разработке используем относительные пути (проксируются через Next.js rewrites)
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "";
+    }
+    
+    // Если переменная окружения установлена, используем её
+    const envApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (envApiUrl) {
+      return envApiUrl;
+    }
+  }
+  
+  // В продакшене используем полный URL
+  return "https://pathvoyager.com";
+};
 
 export const RecentPostsSection = () => {
   const [page, setPage] = useState<number>(1);
+  const [backendArticles, setBackendArticles] = useState<Post[]>([]);
+
+  // Загружаем статьи с бэкенда
+  useEffect(() => {
+    const loadBackendArticles = async () => {
+      try {
+        const apiBaseUrl = getApiBaseUrl();
+        const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data: BackendArticle[] = await response.json();
+          const transformed = data.map(transformBackendArticle);
+          setBackendArticles(transformed);
+        }
+      } catch (error) {
+        console.error("Failed to load backend articles:", error);
+      }
+    };
+
+    loadBackendArticles();
+  }, []);
+
+  // Объединяем статьи с бэкенда и моки, сортируем по убыванию новизны
+  const allArticles = useMemo(() => {
+    const articlesMap = new Map<string, Post>();
+    
+    // Добавляем моки
+    [...popularArticlesMocks, ...recentArticlesMocks].forEach((article) => {
+      articlesMap.set(article.id, article);
+    });
+    
+    // Добавляем статьи с бэкенда (перезаписывают моки с тем же id)
+    backendArticles.forEach((article) => {
+      articlesMap.set(article.id, article);
+    });
+    
+    const articles = Array.from(articlesMap.values());
+    return articles.sort((a, b) => {
+      const dateA = new Date(a.publishedAt).getTime();
+      const dateB = new Date(b.publishedAt).getTime();
+      return dateB - dateA;
+    });
+  }, [backendArticles]);
 
   const paginatedArticles = useMemo(() => {
     return allArticles.slice(0, page * ARTICLES_PER_PAGE);
-  }, [page]);
+  }, [allArticles, page]);
 
   const hasMore = paginatedArticles.length < allArticles.length;
-
-  // Функция для генерации фиксированного случайного столбца для баннера (0, 1 или 2)
-  const getBannerColumn = (groupIndex: number): number => {
-    const seed = groupIndex * 7919;
-    return seed % 3; // Столбец от 0 до 2 (для индексации массива)
-  };
 
   const articlesWithBanner = useMemo(() => {
     const items: Array<{ type: "post"; id: string } | { type: "banner"; id: string }> = [];

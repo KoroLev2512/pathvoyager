@@ -36,8 +36,8 @@ export const PromoBanner = ({
 
   const desktopWidth = toCssSize(width ?? defaultWidth);
   const desktopHeight = toCssSize(height ?? defaultHeight);
-  const mobileWidth = toCssSize(isVertical ? (width ?? 300) : 320);
-  const mobileHeight = toCssSize(isVertical ? (height ?? 250) : 50);
+  const mobileWidth = toCssSize(isVertical ? (width ?? defaultMobileWidth) : defaultMobileWidth);
+  const mobileHeight = toCssSize(isVertical ? (height ?? defaultMobileHeight) : defaultMobileHeight);
 
   // Если width = "100%", используем адаптивную высоту
   const isFullWidth = width === "100%";

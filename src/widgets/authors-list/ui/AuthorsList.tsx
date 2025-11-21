@@ -30,7 +30,7 @@ export const AuthorsList = ({ authors, featuredImage }: AuthorsListProps) => {
       {/* Authors list */}
       <div className="mx-auto w-full max-w-[1160px] px-[140px]">
         <div className="flex flex-col gap-10">
-          {authors.map((author, index) => (
+          {authors.map((author) => (
             <div key={author.id} className="flex flex-col gap-10">
               <div className="flex items-center gap-10">
                 <div className="relative h-[100px] w-[100px] shrink-0 overflow-hidden rounded-full">

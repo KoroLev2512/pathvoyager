@@ -1,21 +1,92 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { popularArticlesMocks } from "@/shared/mocks";
 import { categories } from "@/entities/category/model/data";
 import { PostCard } from "@/entities/post/ui/PostCard";
 import { PromoBanner } from "@/shared/ui/PromoBanner";
+import { transformBackendArticle, type BackendArticle } from "@/entities/post/lib/transformArticle";
+import type { Post } from "@/entities/post/model/types";
 
 const categoriesMap = Object.fromEntries(
   categories.map((category) => [category.id, category]),
 );
 
+// Определяем базовый URL API в зависимости от окружения
+const getApiBaseUrl = (): string => {
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    
+    // В локальной разработке используем относительные пути (проксируются через Next.js rewrites)
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "";
+    }
+    
+    // Если переменная окружения установлена, используем её
+    const envApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (envApiUrl) {
+      return envApiUrl;
+    }
+  }
+  
+  // В продакшене используем полный URL
+  return "https://pathvoyager.com";
+};
+
 export const PopularPostsSection = () => {
+  const [backendArticles, setBackendArticles] = useState<Post[]>([]);
+
+  // Загружаем популярные статьи с бэкенда
+  useEffect(() => {
+    const loadBackendArticles = async () => {
+      try {
+        const apiBaseUrl = getApiBaseUrl();
+        const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data: BackendArticle[] = await response.json();
+          // Фильтруем только популярные статьи
+          const popularBackendArticles = data
+            .filter((article) => article.popular === true)
+            .map(transformBackendArticle);
+          setBackendArticles(popularBackendArticles);
+        }
+      } catch (error) {
+        console.error("Failed to load backend articles:", error);
+      }
+    };
+
+    loadBackendArticles();
+  }, []);
+
+  // Объединяем популярные статьи с бэкенда и моки
+  const popularArticles = useMemo(() => {
+    const articlesMap = new Map<string, Post>();
+    
+    // Добавляем моки
+    popularArticlesMocks.forEach((article) => {
+      articlesMap.set(article.id, article);
+    });
+    
+    // Добавляем популярные статьи с бэкенда (перезаписывают моки с тем же id)
+    backendArticles.forEach((article) => {
+      articlesMap.set(article.id, article);
+    });
+    
+    return Array.from(articlesMap.values());
+  }, [backendArticles]);
+
   // Создаем массив элементов: первые 3 статьи, затем баннер, затем остальные статьи
-  const items = [
-    ...popularArticlesMocks.slice(0, 3).map((post) => ({ type: "post" as const, post })),
-    { type: "banner" as const, id: "banner-1" },
-    ...popularArticlesMocks.slice(3, 5).map((post) => ({ type: "post" as const, post })),
-    ...popularArticlesMocks.slice(5, 8).map((post) => ({ type: "post" as const, post })),
-  ];
+  const items = useMemo(() => {
+    return [
+      ...popularArticles.slice(0, 3).map((post) => ({ type: "post" as const, post })),
+      { type: "banner" as const, id: "banner-1" },
+      ...popularArticles.slice(3, 5).map((post) => ({ type: "post" as const, post })),
+      ...popularArticles.slice(5, 8).map((post) => ({ type: "post" as const, post })),
+    ];
+  }, [popularArticles]);
 
   return (
     <div className="relative w-full bg-white py-12">

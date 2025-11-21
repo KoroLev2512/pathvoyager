@@ -56,10 +56,34 @@ async function initialise() {
         read_time VARCHAR(50),
         published_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         content JSON NOT NULL,
+        popular BOOLEAN DEFAULT FALSE,
         INDEX idx_slug (slug),
-        INDEX idx_published_at (published_at)
+        INDEX idx_published_at (published_at),
+        INDEX idx_popular (popular)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+    
+    // Добавляем колонку popular, если её нет (для существующих таблиц)
+    try {
+      await pool.query(`
+        ALTER TABLE articles 
+        ADD COLUMN IF NOT EXISTS popular BOOLEAN DEFAULT FALSE,
+        ADD INDEX IF NOT EXISTS idx_popular (popular);
+      `);
+    } catch (error) {
+      // Игнорируем ошибку, если колонка уже существует или синтаксис не поддерживается
+      // Для MySQL 5.7+ используем отдельный запрос
+      try {
+        await pool.query(`ALTER TABLE articles ADD COLUMN popular BOOLEAN DEFAULT FALSE;`);
+      } catch (e) {
+        // Колонка уже существует, игнорируем
+      }
+      try {
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_popular ON articles(popular);`);
+      } catch (e) {
+        // Индекс уже существует, игнорируем
+      }
+    }
     console.log("Database tables initialized successfully.");
   } catch (error) {
     console.error("Failed to initialise database:", error.message);

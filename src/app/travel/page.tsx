@@ -1,22 +1,35 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
 import { PromoBanner } from "@/shared/ui/PromoBanner";
 import { categories } from "@/entities/category/model/data";
 import { PostCard } from "@/entities/post/ui/PostCard";
 import { popularArticlesMocks, recentArticlesMocks } from "@/shared/mocks";
+import { transformBackendArticle, type BackendArticle } from "@/entities/post/lib/transformArticle";
+import type { Post } from "@/entities/post/model/types";
 
-const articlesMap = new Map(
-  [...popularArticlesMocks, ...recentArticlesMocks].map((article) => [article.id, article]),
-);
-
-const allArticles = Array.from(articlesMap.values()).sort((a, b) => {
-  const dateA = new Date(a.publishedAt).getTime();
-  const dateB = new Date(b.publishedAt).getTime();
-  return dateB - dateA;
-});
+// Определяем базовый URL API в зависимости от окружения
+const getApiBaseUrl = (): string => {
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    
+    // В локальной разработке используем относительные пути (проксируются через Next.js rewrites)
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "";
+    }
+    
+    // Если переменная окружения установлена, используем её
+    const envApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (envApiUrl) {
+      return envApiUrl;
+    }
+  }
+  
+  // В продакшене используем полный URL
+  return "https://pathvoyager.com";
+};
 
 const categoryOptions = [{ id: "all", title: "All", color: "#333333" }, ...categories];
 
@@ -33,6 +46,50 @@ const getBannerColumn = (groupIndex: number): number => {
 export default function Travel() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [page, setPage] = useState<number>(1);
+  const [backendArticles, setBackendArticles] = useState<Post[]>([]);
+
+  // Загружаем статьи с бэкенда
+  useEffect(() => {
+    const loadBackendArticles = async () => {
+      try {
+        const apiBaseUrl = getApiBaseUrl();
+        const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data: BackendArticle[] = await response.json();
+          const transformed = data.map(transformBackendArticle);
+          setBackendArticles(transformed);
+        }
+      } catch (error) {
+        console.error("Failed to load backend articles:", error);
+      }
+    };
+
+    loadBackendArticles();
+  }, []);
+
+  // Объединяем статьи с бэкенда и моки, сортируем по убыванию новизны
+  const allArticles = useMemo(() => {
+    const articlesMap = new Map<string, Post>();
+    
+    // Добавляем моки
+    [...popularArticlesMocks, ...recentArticlesMocks].forEach((article) => {
+      articlesMap.set(article.id, article);
+    });
+    
+    // Добавляем статьи с бэкенда (перезаписывают моки с тем же id)
+    backendArticles.forEach((article) => {
+      articlesMap.set(article.id, article);
+    });
+    
+    const articles = Array.from(articlesMap.values());
+    return articles.sort((a, b) => {
+      const dateA = new Date(a.publishedAt).getTime();
+      const dateB = new Date(b.publishedAt).getTime();
+      return dateB - dateA;
+    });
+  }, [backendArticles]);
 
   const filteredArticles = useMemo(() => {
     if (activeCategory === "all") {
@@ -40,7 +97,7 @@ export default function Travel() {
     }
 
     return allArticles.filter((article) => article.categoryId === activeCategory);
-  }, [activeCategory]);
+  }, [activeCategory, allArticles]);
 
   const paginatedArticles = useMemo(() => {
     return filteredArticles.slice(0, page * ARTICLES_PER_PAGE);

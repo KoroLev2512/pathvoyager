@@ -22,7 +22,7 @@ router.get("/", async (_req, res) => {
       return;
     }
     const [rows] = await pool.query(
-      `SELECT slug, title, excerpt, hero_image AS heroImage, category_id AS categoryId, author_name AS authorName, read_time AS readTime, published_at AS publishedAt FROM articles ORDER BY published_at DESC`,
+      `SELECT slug, title, excerpt, hero_image AS heroImage, category_id AS categoryId, author_name AS authorName, read_time AS readTime, published_at AS publishedAt, popular FROM articles ORDER BY published_at DESC`,
     );
     res.json(rows);
   } catch (error) {
@@ -41,7 +41,7 @@ router.get("/:slug", async (req, res) => {
       return;
     }
     const [rows] = await pool.query(
-      `SELECT slug, title, excerpt, hero_image AS heroImage, category_id AS categoryId, author_name AS authorName, read_time AS readTime, published_at AS publishedAt, content FROM articles WHERE slug = ? LIMIT 1`,
+      `SELECT slug, title, excerpt, hero_image AS heroImage, category_id AS categoryId, author_name AS authorName, read_time AS readTime, published_at AS publishedAt, content, popular FROM articles WHERE slug = ? LIMIT 1`,
       [slug],
     );
 
@@ -71,6 +71,7 @@ router.post("/", async (req, res) => {
     readTime,
     publishedAt,
     content,
+    popular,
   } = req.body;
 
   if (!slug || !title || !categoryId || !content) {
@@ -102,8 +103,8 @@ router.post("/", async (req, res) => {
     }
     
     const [result] = await pool.query(
-      `INSERT INTO articles (slug, title, excerpt, hero_image, category_id, author_name, read_time, published_at, content)
-       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), ?)
+      `INSERT INTO articles (slug, title, excerpt, hero_image, category_id, author_name, read_time, published_at, content, popular)
+       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), ?, ?)
        ON DUPLICATE KEY UPDATE
          title = VALUES(title),
          excerpt = VALUES(excerpt),
@@ -112,7 +113,8 @@ router.post("/", async (req, res) => {
          author_name = VALUES(author_name),
          read_time = VALUES(read_time),
          published_at = VALUES(published_at),
-         content = VALUES(content)`,
+         content = VALUES(content),
+         popular = VALUES(popular)`,
       [
         slug,
         title,
@@ -123,6 +125,7 @@ router.post("/", async (req, res) => {
         readTime ?? null,
         mysqlDate,
         JSON.stringify(content),
+        popular === true ? 1 : 0,
       ],
     );
 

@@ -43,7 +43,7 @@ export const CategoryDetail = ({
         </p>
         <div className="flex flex-col gap-2 mt-2">
           <p className="font-open-sans text-base font-normal leading-[1.4] text-[#333333] max-[400px]:text-sm">
-            What you'll find here:
+            What you&apos;ll find here:
           </p>
           <ul className="list-disc ml-[21px] space-y-1">
             {features.map((feature, index) => (

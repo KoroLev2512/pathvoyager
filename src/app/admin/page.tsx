@@ -94,6 +94,36 @@ const parseContent = (raw: string) => {
   return blocks;
 };
 
+// Преобразует контент обратно в raw формат для редактирования
+type ContentBlock =
+  | { type: "heading" | "paragraph"; text: string }
+  | { type: "quote"; text: string; author?: string }
+  | { type: "list"; items: string[] }
+  | { type: "banner"; id: string };
+
+const formatContentRaw = (content: ContentBlock[]): string => {
+  if (!Array.isArray(content)) return "";
+  
+  return content.map((block) => {
+    if (block.type === "heading") {
+      return `# ${block.text}`;
+    }
+    if (block.type === "quote") {
+      return `> ${block.text}${block.author ? ` — ${block.author}` : ""}`;
+    }
+    if (block.type === "list") {
+      return block.items.map((item: string) => `- ${item}`).join("\n");
+    }
+    if (block.type === "banner") {
+      return "[[banner]]";
+    }
+    if (block.type === "paragraph") {
+      return block.text;
+    }
+    return "";
+  }).join("\n\n");
+};
+
 const initialForm = {
   title: "",
   slug: "",
@@ -104,6 +134,7 @@ const initialForm = {
   readTime: "5 min read",
   publishedAt: "",
   contentRaw: "",
+  popular: false,
 };
 
 type ArticleSummary = {
@@ -112,6 +143,7 @@ type ArticleSummary = {
   categoryId: string;
   publishedAt: string;
   readTime?: string;
+  popular?: boolean;
 };
 
 export default function AdminPage() {
@@ -158,7 +190,38 @@ export default function AdminPage() {
     loadArticles();
   }, [isAuthenticated]);
 
-  const handleChange = (field: keyof typeof form) => (value: string) => {
+  const handleEditArticle = async (slug: string) => {
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/articles/${slug}` : `/api/articles/${slug}`;
+      const response = await fetch(url);
+      
+      if (response.ok) {
+        const article = await response.json();
+        setForm({
+          title: article.title || "",
+          slug: article.slug || "",
+          excerpt: article.excerpt || "",
+          categoryId: article.categoryId || (categories[0]?.id ?? "digital-nomad"),
+          heroImage: article.heroImage || "",
+          authorName: article.authorName || "",
+          readTime: article.readTime || "5 min read",
+          publishedAt: article.publishedAt ? new Date(article.publishedAt).toISOString().split('T')[0] : "",
+          contentRaw: article.content ? formatContentRaw(JSON.parse(article.content)) : "",
+          popular: article.popular === true || article.popular === 1,
+        });
+        // Прокручиваем к форме
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        setError("Не удалось загрузить статью для редактирования.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Не удалось загрузить статью для редактирования.");
+    }
+  };
+
+  const handleChange = (field: keyof typeof form) => (value: string | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -184,6 +247,7 @@ export default function AdminPage() {
         readTime: form.readTime || null,
         publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
         content: parseContent(form.contentRaw),
+        popular: form.popular || false,
       };
       
       let response;
@@ -418,6 +482,17 @@ export default function AdminPage() {
                       className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
                     />
                   </label>
+                  <label className="flex flex-row items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.popular}
+                      onChange={(event) => handleChange("popular")(event.target.checked)}
+                      className="w-5 h-5 rounded border-[#d6d6d6] text-[#114b5f] focus:ring-2 focus:ring-[#114b5f] cursor-pointer"
+                    />
+                    <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
+                      Popular article
+                    </span>
+                  </label>
                 </div>
 
                 <label className="flex flex-col gap-2">
@@ -497,17 +572,25 @@ export default function AdminPage() {
                         <th className="px-4 py-3 text-left font-open-sans text-sm font-semibold uppercase tracking-[0.06em] text-[#767676]">
                           Дата
                         </th>
+                        <th className="px-4 py-3 text-left font-open-sans text-sm font-semibold uppercase tracking-[0.06em] text-[#767676]">
+                          Popular
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f0f0f0]">
                       {articles.map((article) => (
-                        <tr key={article.slug} className="hover:bg-[#fafafa]">
+                        <tr 
+                          key={article.slug} 
+                          className="hover:bg-[#fafafa] cursor-pointer"
+                          onClick={() => handleEditArticle(article.slug)}
+                        >
                           <td className="px-4 py-3 font-open-sans text-sm text-[#114b5f]">
                             <a
                               href={`/posts/${article.slug}`}
                               target="_blank"
                               rel="noreferrer"
                               className="underline hover:no-underline"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               {article.slug}
                             </a>
@@ -517,11 +600,14 @@ export default function AdminPage() {
                           <td className="px-4 py-3 font-open-sans text-sm text-[#767676]">
                             {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : "—"}
                           </td>
+                          <td className="px-4 py-3 font-open-sans text-sm text-[#767676]">
+                            {article.popular ? "✓" : "—"}
+                          </td>
                         </tr>
                       ))}
                       {articles.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="px-4 py-6 text-center font-open-sans text-sm text-[#767676]">
+                          <td colSpan={5} className="px-4 py-6 text-center font-open-sans text-sm text-[#767676]">
                             Статей пока нет.
                           </td>
                         </tr>
