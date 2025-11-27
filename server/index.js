@@ -54,12 +54,50 @@ app.use(cors({
 app.use(express.json({ limit: "10mb" })); // Увеличиваем лимит для больших статей
 
 // Раздача статических файлов из папки uploads
-const uploadsPath = path.join(process.cwd(), "public", "uploads");
+const getUploadsPath = () => {
+  // Если установлена переменная окружения, используем её
+  if (process.env.UPLOADS_DIR) {
+    return process.env.UPLOADS_DIR;
+  }
+  // Иначе используем public/uploads относительно текущей директории
+  return path.join(process.cwd(), "public", "uploads");
+};
+
+const uploadsPath = getUploadsPath();
 if (fs.existsSync(uploadsPath)) {
-  app.use("/uploads", express.static(uploadsPath));
+  // Используем express.static с правильными опциями для раздачи файлов
+  app.use("/uploads", express.static(uploadsPath, {
+    maxAge: '1y', // Кэширование на 1 год
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+      // Устанавливаем правильные заголовки для изображений
+      const ext = path.extname(filePath).toLowerCase();
+      const contentTypeMap = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
+      };
+      if (contentTypeMap[ext]) {
+        res.setHeader('Content-Type', contentTypeMap[ext]);
+      }
+    }
+  }));
   console.log("Static files from uploads directory are served at /uploads");
+  console.log("Uploads path:", uploadsPath);
 } else {
   console.warn("Uploads directory does not exist:", uploadsPath);
+  // Создаем директорию, если её нет
+  try {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    console.log("Created uploads directory:", uploadsPath);
+    app.use("/uploads", express.static(uploadsPath));
+  } catch (err) {
+    console.error("Failed to create uploads directory:", err);
+  }
 }
 
 app.get("/health", (_req, res) => {

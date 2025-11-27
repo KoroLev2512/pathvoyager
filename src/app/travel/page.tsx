@@ -10,26 +10,7 @@ import { popularArticlesMocks, recentArticlesMocks } from "@/shared/mocks";
 import { transformBackendArticle, type BackendArticle } from "@/entities/post/lib/transformArticle";
 import type { Post } from "@/entities/post/model/types";
 
-// Определяем базовый URL API в зависимости от окружения
-const getApiBaseUrl = (): string => {
-  if (typeof window !== "undefined") {
-    const hostname = window.location.hostname;
-    
-    // В локальной разработке используем относительные пути (проксируются через Next.js rewrites)
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return "";
-    }
-    
-    // Если переменная окружения установлена, используем её
-    const envApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (envApiUrl) {
-      return envApiUrl;
-    }
-  }
-  
-  // В продакшене используем полный URL
-  return "https://pathvoyager.com";
-};
+import { getApiBaseUrl } from "@/shared/lib/getApiBaseUrl";
 
 const categoryOptions = [{ id: "all", title: "All", color: "#333333" }, ...categories];
 

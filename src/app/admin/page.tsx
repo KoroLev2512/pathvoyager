@@ -5,48 +5,7 @@ import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
 import { categories } from "@/entities/category/model/data";
 
-// Определяем базовый URL API в зависимости от окружения
-// 
-// Способы подключения:
-// 1. По умолчанию: используется продакшн бэкенд https://pathvoyager.com
-// 2. Для локального бэкенда: добавить параметр ?backend=local в URL: http://localhost:3000/admin?backend=local
-// 3. Установить переменную окружения NEXT_PUBLIC_REMOTE_BACKEND_URL для кастомного URL
-const getApiBaseUrl = (): string => {
-  // В клиентском компоненте проверяем hostname для определения окружения
-  if (typeof window !== "undefined") {
-    const hostname = window.location.hostname;
-    
-    // Проверяем параметр URL для использования локального бэкенда
-    const urlParams = new URLSearchParams(window.location.search);
-    const useLocalBackend = urlParams.get("backend") === "local";
-    
-    // Если указана переменная окружения для удаленного бэкенда, используем её
-    const remoteBackendUrl = process.env.NEXT_PUBLIC_REMOTE_BACKEND_URL;
-    if (remoteBackendUrl) {
-      return remoteBackendUrl;
-    }
-    
-    // Если есть параметр URL для локального бэкенда, используем его
-    if (useLocalBackend) {
-      return ""; // Относительный путь, проксируется через Next.js rewrites
-    }
-    
-    // По умолчанию в локальной разработке используем продакшн бэкенд
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return "https://pathvoyager.com";
-    }
-    
-    // Если переменная окружения установлена, используем её (для кастомных конфигураций)
-    // В Next.js переменные NEXT_PUBLIC_* заменяются на этапе сборки
-    const envApiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    if (envApiUrl) {
-      return envApiUrl;
-    }
-  }
-  
-  // В продакшене используем полный URL
-  return "https://pathvoyager.com";
-};
+import { getApiBaseUrl } from "@/shared/lib/getApiBaseUrl";
 
 const ADMIN_LOGIN = "admin";
 const ADMIN_PASSWORD = "aboba-2512";
@@ -514,8 +473,9 @@ export default function AdminPage() {
       }
       
       const data = await response.json();
-      const apiBaseUrlForImage = apiBaseUrl || "";
-      const imageUrl = data.url.startsWith("http") ? data.url : `${apiBaseUrlForImage}${data.url}`;
+      // Сохраняем относительный путь для загруженных изображений
+      // Это позволит Next.js правильно обработать их
+      const imageUrl = data.url; // data.url уже содержит относительный путь /uploads/...
       
       handleChange("heroImage")(imageUrl);
       setMessage("Изображение успешно загружено");

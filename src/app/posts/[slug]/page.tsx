@@ -8,6 +8,8 @@ import { categories } from "@/entities/category/model/data";
 import { articleDetailsMocks } from "@/shared/mocks/articleDetails";
 import { popularArticlesMocks, recentArticlesMocks } from "@/shared/mocks";
 
+import { getApiBaseUrl } from "@/shared/lib/getApiBaseUrl";
+
 const categoriesMap = Object.fromEntries(
   categories.map((category) => [category.id, category]),
 );
@@ -55,6 +57,8 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
   const normalizedArticle = normalizeArticle(article, slug);
   const category = categoriesMap[normalizedArticle.categoryId];
   const imageUrl = getArticleImage(article);
+  const apiBaseUrl = getApiBaseUrl();
+  const fullImageUrl = imageUrl.startsWith("http") ? imageUrl : `${apiBaseUrl}${imageUrl}`;
 
   return {
     title: normalizedArticle.title,
@@ -70,13 +74,13 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
     openGraph: {
       title: normalizedArticle.title,
       description: normalizedArticle.excerpt || `${normalizedArticle.title} - Expert travel guide.`,
-      url: `https://pathvoyager.com/posts/${slug}`,
+      url: `${apiBaseUrl}/posts/${slug}`,
       type: "article",
       publishedTime: normalizedArticle.publishedAt,
       authors: normalizedArticle.authorName ? [normalizedArticle.authorName] : undefined,
       images: [
         {
-          url: imageUrl.startsWith("http") ? imageUrl : `https://pathvoyager.com${imageUrl}`,
+          url: fullImageUrl,
           width: 1200,
           height: 630,
           alt: normalizedArticle.title,
@@ -87,10 +91,10 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
       card: "summary_large_image",
       title: normalizedArticle.title,
       description: normalizedArticle.excerpt || `${normalizedArticle.title} - Expert travel guide.`,
-      images: [imageUrl.startsWith("http") ? imageUrl : `https://pathvoyager.com${imageUrl}`],
+      images: [fullImageUrl],
     },
     alternates: {
-      canonical: `https://pathvoyager.com/posts/${slug}`,
+      canonical: `${apiBaseUrl}/posts/${slug}`,
     },
   };
 }
@@ -116,27 +120,12 @@ type ArticleResponse = {
   >;
 };
 
-// Для серверных компонентов используем относительные пути или переменную окружения
-const getApiBaseUrl = () => {
-  // Если переменная окружения установлена, используем её
-  if (process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL) {
-    return process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
-  }
-  // В продакшене для серверных запросов используем полный URL
-  // В development используем относительные пути (проксируются через Next.js rewrites)
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://pathvoyager.com';
-  }
-  return "";
-};
-
-const API_BASE_URL = getApiBaseUrl();
-
 const fetchArticleFromApi = async (slug: string): Promise<ArticleResponse | null> => {
   try {
+    const apiBaseUrl = getApiBaseUrl();
     // Формируем URL для запроса
-    const url = API_BASE_URL 
-      ? `${API_BASE_URL}/api/articles/${slug}`
+    const url = apiBaseUrl 
+      ? `${apiBaseUrl}/api/articles/${slug}`
       : `/api/articles/${slug}`;
     
     const response = await fetch(url, {
@@ -226,16 +215,22 @@ const renderContentBlock = (
 const getArticleImage = (
   article: ArticleResponse | typeof articleDetailsMocks[number] | typeof popularArticlesMocks[number] | typeof recentArticlesMocks[number],
 ): string => {
+  let imageUrl = "/images/hero_bg.webp";
+  
   if ("heroImage" in article && article.heroImage) {
-    return article.heroImage;
+    imageUrl = article.heroImage;
+  } else if ("coverImage" in article && article.coverImage) {
+    imageUrl = article.coverImage;
+  } else if ("image" in article && article.image) {
+    imageUrl = article.image;
   }
-  if ("coverImage" in article && article.coverImage) {
-    return article.coverImage;
+  
+  // Преобразуем полный URL в относительный путь для загруженных изображений
+  if (imageUrl.startsWith("https://pathvoyager.com/uploads/") || imageUrl.startsWith("http://pathvoyager.com/uploads/")) {
+    imageUrl = imageUrl.replace(/^https?:\/\/[^\/]+/, "");
   }
-  if ("image" in article && article.image) {
-    return article.image;
-  }
-  return "/images/hero_bg.webp";
+  
+  return imageUrl;
 };
 
 type NormalizedArticle = {
@@ -304,7 +299,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const normalizedArticle = normalizeArticle(article, slug);
   const category = categoriesMap[normalizedArticle.categoryId];
   const imageUrl = getArticleImage(article);
-  const fullImageUrl = imageUrl.startsWith("http") ? imageUrl : `https://pathvoyager.com${imageUrl}`;
+  const apiBaseUrl = getApiBaseUrl();
+  const fullImageUrl = imageUrl.startsWith("http") ? imageUrl : `${apiBaseUrl}${imageUrl}`;
 
   // Структурированные данные для SEO (JSON-LD)
   const jsonLd = {
@@ -375,14 +371,27 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
               </div>
 
               <div className="relative h-[420px] w-full overflow-hidden">
-                <Image
-                  src={getArticleImage(article)}
-                  fill
-                  sizes="(min-width: 1024px) 720px, 100vw"
-                  className="object-cover object-center"
-                  alt={normalizedArticle.title}
-                  priority
-                />
+                {(() => {
+                  const imageSrc = getArticleImage(article);
+                  const isUploadedImage = imageSrc.startsWith("/uploads/");
+                  
+                  return isUploadedImage ? (
+                    <img
+                      src={imageSrc}
+                      alt={normalizedArticle.title}
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : (
+                    <Image
+                      src={imageSrc}
+                      fill
+                      sizes="(min-width: 1024px) 720px, 100vw"
+                      className="object-cover object-center"
+                      alt={normalizedArticle.title}
+                      priority
+                    />
+                  );
+                })()}
               </div>
 
               <div className="flex flex-col gap-8">

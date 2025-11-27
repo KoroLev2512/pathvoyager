@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
-    // Разрешаем изображения с текущего домена
+    // Разрешаем изображения с текущего домена (для загруженных файлов)
     remotePatterns: [
       {
         protocol: 'https',
@@ -39,7 +39,6 @@ const nextConfig: NextConfig = {
         pathname: '/uploads/**',
       },
     ],
-    // Отключаем оптимизацию для локальных загруженных файлов (они уже оптимизированы)
     unoptimized: false,
   },
   
@@ -54,6 +53,16 @@ const nextConfig: NextConfig = {
           source: '/api/:path*',
           destination: 'http://localhost:4000/api/:path*',
         },
+        // Проксируем запросы к загруженным файлам на бэкенд
+        {
+          source: '/uploads/:path*',
+          destination: 'http://localhost:4000/uploads/:path*',
+        },
+        // Проксируем health check
+        {
+          source: '/health',
+          destination: 'http://localhost:4000/health',
+        }
       ];
     }
     

@@ -10,6 +10,9 @@ type PostCardProps = {
 };
 
 export const PostCard = ({ post, category }: PostCardProps) => {
+  // Определяем, является ли изображение загруженным (из /uploads/)
+  const isUploadedImage = post.image.startsWith("/uploads/");
+  
   return (
     <Link
       href={`/posts/${post.id}`}
@@ -17,13 +20,24 @@ export const PostCard = ({ post, category }: PostCardProps) => {
     >
       <article className="flex flex-col gap-[10px]">
         <div className="relative h-[200px] w-full overflow-hidden">
-          <Image
-            src={post.image}
-            fill
-            sizes="320px"
-            className="object-cover object-center transition duration-300 group-hover:scale-105"
-            alt={post.title}
-          />
+          {isUploadedImage ? (
+            // Для загруженных изображений используем обычный img тег
+            // так как Next.js Image Optimization не может обработать динамически загруженные файлы
+            <img
+              src={post.image}
+              alt={post.title}
+              className="h-full w-full object-cover object-center transition duration-300 group-hover:scale-105"
+            />
+          ) : (
+            // Для статических изображений используем оптимизацию Next.js
+            <Image
+              src={post.image}
+              fill
+              sizes="320px"
+              className="object-cover object-center transition duration-300 group-hover:scale-105"
+              alt={post.title}
+            />
+          )}
         </div>
         <div className="flex items-center justify-start">
           <p className="font-open-sans text-sm leading-[1.4]" style={{ color: category.color }}>

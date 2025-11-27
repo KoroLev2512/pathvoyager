@@ -5,11 +5,23 @@ const fs = require("fs");
 
 const router = express.Router();
 
-// Создаем директорию для загрузок, если её нет
-const uploadsDir = path.join(process.cwd(), "public", "uploads");
+// Создаем директорию для загрузок
+// В проде используем абсолютный путь для лучшей совместимости
+const getUploadsDir = () => {
+  // Если установлена переменная окружения, используем её
+  if (process.env.UPLOADS_DIR) {
+    return process.env.UPLOADS_DIR;
+  }
+  // Иначе используем public/uploads относительно текущей директории
+  return path.join(process.cwd(), "public", "uploads");
+};
+
+const uploadsDir = getUploadsDir();
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log("Created uploads directory:", uploadsDir);
 }
+console.log("Uploads directory:", uploadsDir);
 
 // Настройка multer для сохранения файлов
 const storage = multer.diskStorage({
@@ -49,6 +61,16 @@ router.post("/", upload.single("image"), (req, res) => {
       return res.status(400).json({ message: "Файл не был загружен" });
     }
 
+    // Логируем информацию о сохраненном файле для отладки
+    console.log("File uploaded successfully:", {
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      uploadsDir: uploadsDir,
+      processCwd: process.cwd(),
+      uploadsDirEnv: process.env.UPLOADS_DIR,
+    });
+
     // Возвращаем URL загруженного файла
     const fileUrl = `/uploads/${req.file.filename}`;
     res.json({
@@ -56,6 +78,7 @@ router.post("/", upload.single("image"), (req, res) => {
       filename: req.file.filename,
       originalName: req.file.originalname,
       size: req.file.size,
+      path: req.file.path, // Добавляем путь для отладки (можно убрать в продакшене)
     });
   } catch (error) {
     console.error("Failed to upload file", error);

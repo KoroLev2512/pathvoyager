@@ -92,6 +92,10 @@ NODE_ENV=production
 
 # Email Configuration
 ADMIN_EMAIL=webmaster@pathvoyager.com
+
+# Uploads Directory (для продакшена используйте абсолютный путь)
+# В ecosystem.config.js уже настроено, но можно также добавить в .env:
+# UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads
 ```
 
 **Важно:** Убедитесь, что файл `.env` имеет правильные права доступа (обычно `644` или `600`).
@@ -155,6 +159,7 @@ npm run build
 2. Файл `ecosystem.config.js` уже создан в корне проекта с правильными настройками:
    - Использует Unix socket: `/var/www/clo/data/nodejs/1.sock`
    - Настроен для production окружения
+   - Указан абсолютный путь для uploads: `UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads`
 
 3. Запустите через PM2:
    ```bash
@@ -221,6 +226,27 @@ server {
         proxy_cache pathvoyager_cache;
         proxy_cache_valid 200 24h;
         proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    }
+    
+    # Статические файлы из uploads (загруженные изображения)
+    # ВАЖНО: Настройте этот блок ПЕРЕД location /, чтобы Nginx раздавал файлы напрямую
+    # Это критически важно для работы загруженных изображений!
+    location /uploads/ {
+        # Абсолютный путь к папке с загруженными файлами
+        alias /var/www/clo/data/www/pathvoyager.com/public/uploads/;
+        
+        # Кэширование на 1 год
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        
+        # Разрешаем только изображения
+        location ~* \.(png|jpg|jpeg|gif|webp|svg|ico)$ {
+            try_files $uri =404;
+            access_log off;
+        }
+        
+        # Блокируем доступ к другим типам файлов
+        deny all;
     }
     
     # API endpoints
@@ -350,6 +376,139 @@ pm2 restart pathvoyager-api
    npm run build
    ```
 3. Проверьте, что файлы в `.next/` существуют
+
+### Проблема: Загруженные изображения возвращают 404 (GET /uploads/... 404)
+
+**Диагностика:**
+1. **Проверьте, существует ли файл на сервере:**
+   ```bash
+   ls -la /var/www/clo/data/www/pathvoyager.com/public/uploads/
+   # Или проверьте конкретный файл:
+   ls -la /var/www/clo/data/www/pathvoyager.com/public/uploads/1764289451412-227170247-supabase-schema-qmeatgjmrihutzzkflxb.png
+   ```
+
+2. **Проверьте, где сервер сохраняет файлы:**
+   ```bash
+   # Проверьте логи PM2, чтобы увидеть путь к uploads директории:
+   pm2 logs pathvoyager-api --lines 100 | grep -i upload
+   # Или проверьте последние логи после загрузки файла:
+   pm2 logs pathvoyager-api --lines 50
+   ```
+
+3. **Найдите все файлы uploads на сервере:**
+   ```bash
+   # Поиск всех PNG файлов в проекте:
+   find /var/www/clo/data/www/pathvoyager.com -name "*.png" -type f | head -20
+   
+   # Поиск конкретного файла:
+   find /var/www/clo/data/www/pathvoyager.com -name "1764289451412-227170247-supabase-schema-qmeatgjmrihutzzkflxb.png"
+   
+   # Проверьте, может быть файлы в .next/standalone/public/uploads/:
+   ls -la /var/www/clo/data/www/pathvoyager.com/.next/standalone/public/uploads/ 2>/dev/null || echo "Directory does not exist"
+   ```
+
+3. **Проверьте конфигурацию Nginx:**
+   ```bash
+   # Убедитесь, что блок location /uploads/ настроен ПЕРЕД location /
+   nginx -T | grep -A 10 "location /uploads"
+   ```
+
+4. **Проверьте права доступа:**
+   ```bash
+   # Директория должна быть доступна для чтения:
+   chmod 755 /var/www/clo/data/www/pathvoyager.com/public/uploads
+   chmod 644 /var/www/clo/data/www/pathvoyager.com/public/uploads/*.png
+   ```
+
+**Решение:**
+
+1. **Убедитесь, что Nginx настроен правильно:**
+   - Блок `location /uploads/` должен быть **ПЕРЕД** `location /`
+   - Проверьте, что путь в `alias` правильный: `/var/www/clo/data/www/pathvoyager.com/public/uploads/`
+   - Перезагрузите Nginx: `nginx -t && systemctl reload nginx`
+
+2. **Убедитесь, что файлы сохраняются в правильную директорию:**
+   - В `ecosystem.config.js` уже настроено `UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads`
+   - Перезапустите PM2, чтобы применить изменения: `pm2 restart pathvoyager-api`
+   - Проверьте логи после перезапуска: `pm2 logs pathvoyager-api --lines 20 | grep -i upload`
+   - Должно быть сообщение: `Uploads directory: /var/www/clo/data/www/pathvoyager.com/public/uploads`
+
+3. **Проверьте, что директория существует:**
+   ```bash
+   mkdir -p /var/www/clo/data/www/pathvoyager.com/public/uploads
+   chown -R www-data:www-data /var/www/clo/data/www/pathvoyager.com/public/uploads
+   chmod 755 /var/www/clo/data/www/pathvoyager.com/public/uploads
+   ```
+
+4. **Если файлы сохраняются в другую директорию:**
+   - Проверьте логи PM2, чтобы увидеть фактический путь к uploads: `pm2 logs pathvoyager-api | grep "File uploaded"`
+   - Если файлы в `.next/standalone/public/uploads/`, переместите их:
+     ```bash
+     mkdir -p /var/www/clo/data/www/pathvoyager.com/public/uploads
+     cp -r /var/www/clo/data/www/pathvoyager.com/.next/standalone/public/uploads/* /var/www/clo/data/www/pathvoyager.com/public/uploads/ 2>/dev/null || true
+     ```
+   - Если файлы в другой директории, найдите их и переместите:
+     ```bash
+     # Найдите директорию с файлами
+     find /var/www/clo/data/www/pathvoyager.com -name "1764289451412-*.png" -type f
+     # Скопируйте все файлы в правильную директорию
+     mkdir -p /var/www/clo/data/www/pathvoyager.com/public/uploads
+     # Замените <найденный_путь> на фактический путь
+     cp <найденный_путь>/*.png /var/www/clo/data/www/pathvoyager.com/public/uploads/
+     ```
+   - После перемещения файлов перезапустите PM2: `pm2 restart pathvoyager-api`
+
+5. **Временное решение - использовать API route:**
+   - API route `/api/uploads/[...path]` уже создан и будет работать как fallback
+   - Но это менее эффективно, чем прямая раздача через Nginx
+
+### Проблема: Порт 4000 уже занят (EADDRINUSE)
+
+**Решение:**
+Это означает, что сервер уже запущен. Не запускайте сервер вручную через `npm run server` на продакшене!
+
+1. **Проверьте статус PM2:**
+   ```bash
+   pm2 status
+   pm2 logs pathvoyager-api --lines 50
+   ```
+
+2. **Если сервер запущен через PM2, используйте команды PM2:**
+   ```bash
+   # Перезапустить сервер
+   pm2 restart pathvoyager-api
+   
+   # Остановить сервер
+   pm2 stop pathvoyager-api
+   
+   # Удалить из PM2
+   pm2 delete pathvoyager-api
+   ```
+
+3. **Если нужно запустить сервер заново через PM2:**
+   ```bash
+   cd /var/www/clo/data/www/pathvoyager.com
+   export PATH="/var/www/clo/data/.nvm/versions/node/v25.2.0/bin:$PATH"
+   pm2 start ecosystem.config.js
+   pm2 save
+   ```
+
+4. **Если нужно запустить вручную для отладки (не рекомендуется на продакшене):**
+   - Сначала остановите PM2 процесс:
+     ```bash
+     pm2 stop pathvoyager-api
+     ```
+   - Или используйте другой порт:
+     ```bash
+     PORT=4001 npm run server
+     ```
+
+5. **Проверьте, какой процесс занимает порт 4000:**
+   ```bash
+   lsof -i :4000
+   # Или
+   netstat -tulpn | grep 4000
+   ```
 
 ### Проблема: Node.js версия не соответствует
 

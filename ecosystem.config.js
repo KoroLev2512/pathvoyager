@@ -9,6 +9,7 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 4000,
         SOCKET_PATH: '/var/www/clo/data/nodejs/1.sock',
+        UPLOADS_DIR: '/var/www/clo/data/www/pathvoyager.com/public/uploads',
       },
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
