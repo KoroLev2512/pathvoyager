@@ -87,7 +87,8 @@ async function initialise() {
     console.log("Database tables initialized successfully.");
   } catch (error) {
     console.error("Failed to initialise database:", error.message);
-    throw error;
+    // Пробрасываем ошибку дальше для обработки в вызывающем коде
+    return Promise.reject(error);
   }
 }
 

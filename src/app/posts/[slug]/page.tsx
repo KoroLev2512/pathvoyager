@@ -27,6 +27,10 @@ articleDetailsMocks.forEach((article) => {
   }
 });
 
+// Принудительно используем динамический рендеринг, чтобы новые статьи были доступны сразу
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type ArticlePageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -118,8 +122,11 @@ const getApiBaseUrl = () => {
   if (process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL) {
     return process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
   }
-  // В продакшене используем относительные пути (проксируются через Nginx)
-  // В development можно использовать localhost, но лучше относительные пути
+  // В продакшене для серверных запросов используем полный URL
+  // В development используем относительные пути (проксируются через Next.js rewrites)
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://pathvoyager.com';
+  }
   return "";
 };
 
@@ -127,12 +134,13 @@ const API_BASE_URL = getApiBaseUrl();
 
 const fetchArticleFromApi = async (slug: string): Promise<ArticleResponse | null> => {
   try {
-    // Используем относительный путь, если API_BASE_URL пустой
+    // Формируем URL для запроса
     const url = API_BASE_URL 
       ? `${API_BASE_URL}/api/articles/${slug}`
       : `/api/articles/${slug}`;
     
     const response = await fetch(url, {
+      cache: 'no-store', // Отключаем кеширование полностью для динамического контента
       next: { revalidate: 0 },
     });
 

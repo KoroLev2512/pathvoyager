@@ -6,14 +6,34 @@ import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
 import { categories } from "@/entities/category/model/data";
 
 // Определяем базовый URL API в зависимости от окружения
+// 
+// Способы подключения:
+// 1. По умолчанию: используется продакшн бэкенд https://pathvoyager.com
+// 2. Для локального бэкенда: добавить параметр ?backend=local в URL: http://localhost:3000/admin?backend=local
+// 3. Установить переменную окружения NEXT_PUBLIC_REMOTE_BACKEND_URL для кастомного URL
 const getApiBaseUrl = (): string => {
   // В клиентском компоненте проверяем hostname для определения окружения
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
     
-    // В локальной разработке используем относительные пути (проксируются через Next.js rewrites)
+    // Проверяем параметр URL для использования локального бэкенда
+    const urlParams = new URLSearchParams(window.location.search);
+    const useLocalBackend = urlParams.get("backend") === "local";
+    
+    // Если указана переменная окружения для удаленного бэкенда, используем её
+    const remoteBackendUrl = process.env.NEXT_PUBLIC_REMOTE_BACKEND_URL;
+    if (remoteBackendUrl) {
+      return remoteBackendUrl;
+    }
+    
+    // Если есть параметр URL для локального бэкенда, используем его
+    if (useLocalBackend) {
+      return ""; // Относительный путь, проксируется через Next.js rewrites
+    }
+    
+    // По умолчанию в локальной разработке используем продакшн бэкенд
     if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return "";
+      return "https://pathvoyager.com";
     }
     
     // Если переменная окружения установлена, используем её (для кастомных конфигураций)
@@ -156,8 +176,18 @@ export default function AdminPage() {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
 
   const categoryOptions = useMemo(() => categories, []);
+  
+  // Определяем, к какому бэкенду подключены
+  const apiBaseUrl = useMemo(() => {
+    if (typeof window !== "undefined") {
+      return getApiBaseUrl();
+    }
+    return "";
+  }, []);
 
   useEffect(() => {
     const persisted = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
@@ -174,16 +204,153 @@ export default function AdminPage() {
         }
         const apiBaseUrl = getApiBaseUrl();
         const url = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
-        const response = await fetch(url);
+        
+        console.log("Loading articles from:", url);
+        console.log("API Base URL:", apiBaseUrl);
+        
+        // Создаем AbortController для таймаута
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+        
+        // Проверяем доступность бэкенда перед основным запросом
+        if (!apiBaseUrl || apiBaseUrl === "") {
+          // Локальный бэкенд - проверяем через прокси Next.js
+          try {
+            const healthController = new AbortController();
+            const healthTimeoutId = setTimeout(() => healthController.abort(), 3000);
+            
+            const healthResponse = await fetch("/health", {
+              method: "GET",
+              signal: healthController.signal,
+            });
+            
+            clearTimeout(healthTimeoutId);
+            
+            if (!healthResponse.ok) {
+              console.warn("Local backend health check failed:", healthResponse.status);
+              clearTimeout(timeoutId);
+              setError(
+                `Локальный бэкенд не отвечает (${healthResponse.status}). ` +
+                `Убедитесь, что бэкенд запущен: выполните 'npm run server' в отдельном терминале.`
+              );
+              return;
+            } else {
+              console.log("Local backend is healthy");
+            }
+          } catch (healthErr) {
+            console.warn("Local backend health check error:", healthErr);
+            clearTimeout(timeoutId);
+            const isAbortError = healthErr instanceof Error && healthErr.name === "AbortError";
+            if (isAbortError || (healthErr instanceof Error && healthErr.message.includes("Failed to fetch"))) {
+              setError(
+                `Локальный бэкенд недоступен. ` +
+                `Запустите бэкенд командой 'npm run server' в отдельном терминале. ` +
+                `Бэкенд должен слушать на порту 4000.`
+              );
+            } else {
+              setError(
+                `Ошибка подключения к локальному бэкенду: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}. ` +
+                `Убедитесь, что бэкенд запущен на порту 4000.`
+              );
+            }
+            return;
+          }
+        } else {
+          // Продакшн или удаленный бэкенд - проверяем через /health
+          try {
+            const healthUrl = apiBaseUrl.includes("/api") 
+              ? apiBaseUrl.replace("/api/articles", "/health")
+              : `${apiBaseUrl}/health`;
+            console.log("Checking backend health at:", healthUrl);
+            
+            const healthController = new AbortController();
+            const healthTimeoutId = setTimeout(() => healthController.abort(), 5000);
+            
+            const healthResponse = await fetch(healthUrl, {
+              method: "GET",
+              signal: healthController.signal,
+            });
+            
+            clearTimeout(healthTimeoutId);
+            
+            if (!healthResponse.ok) {
+              console.warn("Backend health check failed:", healthResponse.status);
+            } else {
+              console.log("Backend is healthy");
+            }
+          } catch (healthErr) {
+            console.warn("Backend health check error:", healthErr);
+            // Не блокируем основной запрос, если health check не прошел
+            // Просто логируем предупреждение
+          }
+        }
+        
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Проверяем, что ответ действительно JSON, а не HTML (404 от Next.js)
+        const contentType = response.headers.get("content-type");
+        if (contentType && !contentType.includes("application/json")) {
+          const errorText = await response.text();
+          console.error("Received non-JSON response:", contentType, errorText.substring(0, 200));
+          
+          if (!apiBaseUrl || apiBaseUrl === "") {
+            // Локальный бэкенд - вероятно не запущен
+            setError(
+              `Локальный бэкенд не запущен или недоступен (${response.status}). ` +
+              `Запустите бэкенд командой 'npm run server' в отдельном терминале. ` +
+              `Бэкенд должен слушать на порту 4000. ` +
+              `Запрос попал в Next.js вместо Express бэкенда.`
+            );
+          } else {
+            setError(
+              `Получен неверный ответ от сервера (${response.status}). ` +
+              `Возможно, запрос попал в Next.js вместо Express бэкенда. ` +
+              `Проверьте URL: ${url}`
+            );
+          }
+          return;
+        }
+        
         if (!response.ok) {
-          setError("Не удалось загрузить статьи. Убедитесь, что запущен бэкенд.");
+          const errorText = await response.text();
+          console.error("Failed to load articles:", response.status, errorText.substring(0, 200));
+          setError(
+            `Не удалось загрузить статьи (${response.status}). ` +
+            `Проверьте подключение к бэкенду: ${apiBaseUrl || "локальный"}. ` +
+            `Если используете удаленный бэкенд, убедитесь, что порт 4000 открыт.`
+          );
           return;
         }
         const data = await response.json();
         setArticles(data);
+        setError(null); // Очищаем ошибку при успешной загрузке
       } catch (err) {
-        console.error(err);
-        setError("Не удалось загрузить статьи. Убедитесь, что запущен бэкенд.");
+        console.error("Error loading articles:", err);
+        const apiBaseUrl = getApiBaseUrl();
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const isAbortError = err instanceof Error && err.name === "AbortError";
+        
+        if (isAbortError || errorMessage.includes("timeout") || errorMessage.includes("Failed to fetch")) {
+          setError(
+            `Таймаут подключения к бэкенду: ${apiBaseUrl || "локальный"}. ` +
+            `Проверьте, что бэкенд запущен и порт 4000 доступен извне. ` +
+            `Если используете удаленный бэкенд, убедитесь, что порт открыт в файрволе.`
+          );
+        } else {
+          setError(
+            `Не удалось загрузить статьи: ${errorMessage}. ` +
+            `Бэкенд: ${apiBaseUrl || "локальный"}. ` +
+            `Проверьте, что бэкенд запущен и доступен.`
+          );
+        }
       }
     };
 
@@ -198,6 +365,23 @@ export default function AdminPage() {
       
       if (response.ok) {
         const article = await response.json();
+        
+        // Обрабатываем content: может быть строкой JSON или уже объектом
+        let contentData = null;
+        if (article.content) {
+          if (typeof article.content === 'string') {
+            try {
+              contentData = JSON.parse(article.content);
+            } catch (e) {
+              console.error('Failed to parse content as JSON:', e);
+              contentData = null;
+            }
+          } else if (typeof article.content === 'object') {
+            // Уже объект (MySQL JSON колонка возвращается как объект)
+            contentData = article.content;
+          }
+        }
+        
         setForm({
           title: article.title || "",
           slug: article.slug || "",
@@ -207,7 +391,7 @@ export default function AdminPage() {
           authorName: article.authorName || "",
           readTime: article.readTime || "5 min read",
           publishedAt: article.publishedAt ? new Date(article.publishedAt).toISOString().split('T')[0] : "",
-          contentRaw: article.content ? formatContentRaw(JSON.parse(article.content)) : "",
+          contentRaw: contentData ? formatContentRaw(contentData) : "",
           popular: article.popular === true || article.popular === 1,
         });
         // Прокручиваем к форме
@@ -269,7 +453,6 @@ export default function AdminPage() {
       }
 
       if (!response.ok) {
-        // Пытаемся получить детали ошибки от сервера
         let errorMessage = "Ошибка при сохранении статьи";
         try {
           const errorData = await response.json();
@@ -302,6 +485,114 @@ export default function AdminPage() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleImageUpload = async (file: File) => {
+    setIsUploading(true);
+    setError(null);
+    
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/upload` : "/api/upload";
+      
+      const formData = new FormData();
+      formData.append("image", file);
+      
+      const response = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Ошибка загрузки" }));
+        const errorMessage = errorData.message || "Ошибка при загрузке изображения";
+        console.error("Error uploading image:", errorMessage);
+        setError(errorMessage);
+        setIsUploading(false);
+        return;
+      }
+      
+      const data = await response.json();
+      const apiBaseUrlForImage = apiBaseUrl || "";
+      const imageUrl = data.url.startsWith("http") ? data.url : `${apiBaseUrlForImage}${data.url}`;
+      
+      handleChange("heroImage")(imageUrl);
+      setMessage("Изображение успешно загружено");
+    } catch (err) {
+      console.error("Error uploading image:", err);
+      setError(err instanceof Error ? err.message : "Не удалось загрузить изображение");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith("image/")) {
+        handleImageUpload(file);
+      } else {
+        setError("Пожалуйста, загрузите изображение");
+      }
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleImageUpload(e.target.files[0]);
+    }
+  };
+
+  const handleDeleteArticle = async (slug: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Предотвращаем срабатывание onClick на строке
+    
+    if (!confirm(`Вы уверены, что хотите удалить статью "${slug}"? Это действие нельзя отменить.`)) {
+      return;
+    }
+
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const url = apiBaseUrl ? `${apiBaseUrl}/api/articles/${slug}` : `/api/articles/${slug}`;
+      
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: "Ошибка удаления" }));
+        const errorMessage = errorData.message || "Ошибка при удалении статьи";
+        console.error("Error deleting article:", errorMessage);
+        setError(errorMessage);
+        return;
+      }
+
+      setMessage(`Статья "${slug}" успешно удалена`);
+      setError(null);
+
+      const refreshUrl = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
+      const updatedArticles = await fetch(refreshUrl).then((res) => res.json());
+      setArticles(updatedArticles);
+    } catch (err) {
+      console.error("Error deleting article:", err);
+      setError(err instanceof Error ? err.message : "Не удалось удалить статью");
     }
   };
 
@@ -388,13 +679,25 @@ export default function AdminPage() {
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex flex-col gap-2">
-                    <h1 className="font-playfair text-[40px] font-normal leading-[110%] text-[#333333]">
-                      Admin — создание статьи
-                    </h1>
+                    <div className="flex items-center gap-3">
+                      <h1 className="font-playfair text-[40px] font-normal leading-[110%] text-[#333333]">
+                        Admin — создание статьи
+                      </h1>
+                      {apiBaseUrl && (
+                        <span className="rounded-full bg-[#ecf8f4] px-3 py-1 font-open-sans text-xs font-medium text-[#114b5f]">
+                          {apiBaseUrl.includes("pathvoyager.com") ? "Продакшн бэкенд" : "Локальный бэкенд"}
+                        </span>
+                      )}
+                      {!apiBaseUrl && (
+                        <span className="rounded-full bg-[#ecf8f4] px-3 py-1 font-open-sans text-xs font-medium text-[#114b5f]">
+                          Локальный бэкенд
+                        </span>
+                      )}
+                    </div>
                     <p className="font-open-sans text-base leading-[1.6] text-[#767676]">
-                      Используйте форму ниже, чтобы подготовить материал для PathVoyager. Контент можно
-                      описывать в формате Markdown: <code>#</code> — заголовок, <code>-</code> — элементы списка,
-                      <code>&gt;</code> — цитата, <code>[[banner]]</code> — место для баннера внутри текста.
+                      Используйте форму ниже, чтобы подготовить материал для PathVoyager. Контент можно описывать в формате Markdown:
+                      <br />
+                      <code>#</code> — заголовок, <code>-</code> — элементы списка, <code>&gt;</code> — цитата, <code>[[banner]]</code> — место для баннера внутри текста.
                     </p>
                   </div>
                   <button
@@ -507,17 +810,90 @@ export default function AdminPage() {
                   />
                 </label>
 
-                <label className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2">
                   <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
-                    Обложка (URL)
+                    Обложка
                   </span>
-                  <input
-                    value={form.heroImage}
-                    onChange={(event) => handleChange("heroImage")(event.target.value)}
-                    className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
-                    placeholder="https://..."
-                  />
-                </label>
+                  
+                  {/* Drag and Drop зона */}
+                  <div
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
+                      dragActive
+                        ? "border-[#114b5f] bg-[#f0f8fa]"
+                        : "border-[#d6d6d6] bg-white hover:border-[#114b5f]"
+                    } ${isUploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileInput}
+                      disabled={isUploading}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
+                      {form.heroImage ? (
+                        <>
+                          <img
+                            src={form.heroImage}
+                            alt="Preview"
+                            className="max-h-48 max-w-full rounded-lg object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                          <p className="font-open-sans text-sm text-[#767676]">
+                            Нажмите или перетащите изображение для замены
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-12 h-12 text-[#767676]"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <div className="flex flex-col gap-1">
+                            <p className="font-open-sans text-sm font-medium text-[#333333]">
+                              Нажмите или перетащите изображение сюда
+                            </p>
+                            <p className="font-open-sans text-xs text-[#767676]">
+                              Поддерживаются форматы: JPG, PNG, WEBP (макс. 10MB)
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      {isUploading && (
+                        <p className="font-open-sans text-sm text-[#114b5f]">Загрузка...</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Поле для ввода URL вручную */}
+                  <div className="mt-2">
+                    <label className="font-open-sans text-xs uppercase tracking-[0.08em] text-[#767676] mb-1 block">
+                      Или введите URL изображения
+                    </label>
+                    <input
+                      type="text"
+                      value={form.heroImage}
+                      onChange={(event) => handleChange("heroImage")(event.target.value)}
+                      className="w-full rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                      placeholder="https://..."
+                    />
+                  </div>
+                </div>
 
                 <label className="flex flex-col gap-2">
                   <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
@@ -575,6 +951,9 @@ export default function AdminPage() {
                         <th className="px-4 py-3 text-left font-open-sans text-sm font-semibold uppercase tracking-[0.06em] text-[#767676]">
                           Popular
                         </th>
+                        <th className="px-4 py-3 text-left font-open-sans text-sm font-semibold uppercase tracking-[0.06em] text-[#767676]">
+                          Действия
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f0f0f0]">
@@ -603,11 +982,20 @@ export default function AdminPage() {
                           <td className="px-4 py-3 font-open-sans text-sm text-[#767676]">
                             {article.popular ? "✓" : "—"}
                           </td>
+                          <td className="px-4 py-3 font-open-sans text-sm text-[#767676]">
+                            <button
+                              onClick={(e) => handleDeleteArticle(article.slug, e)}
+                              className="rounded-lg border border-[#cc2a2a] px-3 py-1 font-open-sans text-xs font-medium text-[#cc2a2a] transition hover:bg-[#cc2a2a] hover:text-white cursor-pointer"
+                              title="Удалить статью"
+                            >
+                              Удалить
+                            </button>
+                          </td>
                         </tr>
                       ))}
                       {articles.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-4 py-6 text-center font-open-sans text-sm text-[#767676]">
+                          <td colSpan={6} className="px-4 py-6 text-center font-open-sans text-sm text-[#767676]">
                             Статей пока нет.
                           </td>
                         </tr>

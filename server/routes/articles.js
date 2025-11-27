@@ -59,7 +59,8 @@ router.get("/:slug", async (req, res) => {
 
 router.post("/", async (req, res) => {
   console.log("POST /api/articles - Request received");
-  console.log("Body:", JSON.stringify(req.body, null, 2));
+  console.log("Body keys:", Object.keys(req.body));
+  console.log("Content type:", req.headers["content-type"]);
   
   const {
     slug,
@@ -74,9 +75,36 @@ router.post("/", async (req, res) => {
     popular,
   } = req.body;
 
-  if (!slug || !title || !categoryId || !content) {
-    console.log("Validation failed - missing required fields");
-    res.status(400).json({ message: "slug, title, categoryId and content are required" });
+  // Валидация обязательных полей
+  if (!slug || !title || !categoryId) {
+    console.log("Validation failed - missing required fields:", { slug: !!slug, title: !!title, categoryId: !!categoryId });
+    res.status(400).json({ message: "slug, title, and categoryId are required" });
+    return;
+  }
+
+  // Проверяем content - может быть массивом или уже строкой JSON
+  let contentToSave = content;
+  if (!contentToSave) {
+    console.log("Validation failed - content is required");
+    res.status(400).json({ message: "content is required" });
+    return;
+  }
+
+  // Если content уже строка, пытаемся распарсить
+  if (typeof contentToSave === "string") {
+    try {
+      contentToSave = JSON.parse(contentToSave);
+    } catch (e) {
+      console.error("Failed to parse content as JSON:", e);
+      res.status(400).json({ message: "content must be a valid JSON array" });
+      return;
+    }
+  }
+
+  // Проверяем, что content - массив
+  if (!Array.isArray(contentToSave)) {
+    console.log("Validation failed - content must be an array");
+    res.status(400).json({ message: "content must be an array" });
     return;
   }
 
@@ -84,7 +112,7 @@ router.post("/", async (req, res) => {
     const pool = getPoolSafe();
     if (!pool) {
       console.log("Database pool not available");
-      res.status(503).json({ message: "Database not available. Please install MySQL for development." });
+      res.status(503).json({ message: "Database not available" });
       return;
     }
     console.log("Attempting to save article to database...");
@@ -94,13 +122,19 @@ router.post("/", async (req, res) => {
     if (publishedAt) {
       try {
         const date = new Date(publishedAt);
-        // Форматируем дату для MySQL: YYYY-MM-DD HH:MM:SS
-        mysqlDate = date.toISOString().slice(0, 19).replace('T', ' ');
+        if (!isNaN(date.getTime())) {
+          // Форматируем дату для MySQL: YYYY-MM-DD HH:MM:SS
+          mysqlDate = date.toISOString().slice(0, 19).replace('T', ' ');
+        }
       } catch (error) {
         console.error("Error parsing date:", error);
         mysqlDate = null;
       }
     }
+    
+    // Преобразуем content в JSON строку
+    const contentJson = JSON.stringify(contentToSave);
+    console.log("Content length:", contentJson.length);
     
     const [result] = await pool.query(
       `INSERT INTO articles (slug, title, excerpt, hero_image, category_id, author_name, read_time, published_at, content, popular)
@@ -124,19 +158,84 @@ router.post("/", async (req, res) => {
         authorName ?? null,
         readTime ?? null,
         mysqlDate,
-        JSON.stringify(content),
-        popular === true ? 1 : 0,
+        contentJson,
+        popular === true || popular === 1 ? 1 : 0,
       ],
     );
 
+    console.log("Article saved successfully:", slug);
     res.status(201).json({ slug });
   } catch (error) {
     console.error("Failed to save article", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
+    });
+    
     // Возвращаем более детальное сообщение об ошибке
     const errorMessage = error.message || "Failed to save article";
+    const errorCode = error.code || "UNKNOWN";
+    
     res.status(500).json({ 
       message: errorMessage,
-      error: process.env.NODE_ENV === "development" ? error.stack : undefined
+      code: errorCode,
+      // В проде не показываем stack trace, но показываем код ошибки
+      ...(process.env.NODE_ENV === "development" ? { stack: error.stack } : {}),
+    });
+  }
+});
+
+router.delete("/:slug", async (req, res) => {
+  const { slug } = req.params;
+  console.log("DELETE /api/articles/:slug - Request received for slug:", slug);
+  
+  try {
+    const pool = getPoolSafe();
+    if (!pool) {
+      console.log("Database pool not available");
+      res.status(503).json({ message: "Database not available" });
+      return;
+    }
+    
+    // Проверяем, существует ли статья
+    const [existing] = await pool.query(
+      `SELECT id FROM articles WHERE slug = ? LIMIT 1`,
+      [slug],
+    );
+    
+    if (existing.length === 0) {
+      res.status(404).json({ message: "Article not found" });
+      return;
+    }
+    
+    // Удаляем статью
+    await pool.query(
+      `DELETE FROM articles WHERE slug = ?`,
+      [slug],
+    );
+    
+    console.log("Article deleted successfully:", slug);
+    res.status(200).json({ message: "Article deleted successfully", slug });
+  } catch (error) {
+    console.error("Failed to delete article", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
+    });
+    
+    const errorMessage = error.message || "Failed to delete article";
+    const errorCode = error.code || "UNKNOWN";
+    
+    res.status(500).json({ 
+      message: errorMessage,
+      code: errorCode,
+      ...(process.env.NODE_ENV === "development" ? { stack: error.stack } : {}),
     });
   }
 });

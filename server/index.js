@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { initialise } = require("./db");
 const articlesRouter = require("./routes/articles");
+const uploadRouter = require("./routes/upload");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -12,29 +13,52 @@ const SOCKET_PATH = process.env.SOCKET_PATH;
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
-  : ["http://localhost:3000", "http://127.0.0.1:3000", "https://pathvoyager.com", "https://www.pathvoyager.com"];
+  : [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:3001",
+      "http://127.0.0.1:3001",
+      "https://pathvoyager.com",
+      "https://www.pathvoyager.com",
+      "http://pathvoyager.com",
+      "http://www.pathvoyager.com",
+    ];
 
 app.use(cors({ 
   origin: (origin, callback) => {
     // Разрешаем запросы без origin (например, из Postman) или из разрешенных источников
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) {
       callback(null, true);
-    } else {
-      console.warn("CORS blocked origin:", origin);
-      callback(new Error("Not allowed by CORS"));
+      return;
     }
+    
+    // Разрешаем все localhost порты для разработки
+    if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+      callback(null, true);
+      return;
+    }
+    
+    // Проверяем список разрешенных источников
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    
+    console.warn("CORS blocked origin:", origin);
+    callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "10mb" })); // Увеличиваем лимит для больших статей
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
 app.use("/api/articles", articlesRouter);
+app.use("/api/upload", uploadRouter);
 
 // Определяем development режим:
 // - Если есть SOCKET_PATH - это продакшен
@@ -62,10 +86,16 @@ initialise()
         fs.mkdirSync(socketDir, { recursive: true });
       }
 
+      // В проде слушаем и на socket (для Nginx), и на порту (для внешних подключений)
       app.listen(SOCKET_PATH, () => {
         // Устанавливаем права доступа на socket файл
         fs.chmodSync(SOCKET_PATH, 0o666);
         console.log(`Express server listening on socket ${SOCKET_PATH}`);
+      });
+      
+      // Также слушаем на порту для внешних подключений (например, с локальной машины)
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Express server also listening on port ${PORT} for external connections`);
       });
     } else {
       app.listen(PORT, () => {
@@ -110,6 +140,10 @@ initialise()
         app.listen(SOCKET_PATH, () => {
           fs.chmodSync(SOCKET_PATH, 0o666);
           console.log(`Express server listening on socket ${SOCKET_PATH} (без БД)`);
+        });
+        // Также слушаем на порту для внешних подключений
+        app.listen(PORT, "0.0.0.0", () => {
+          console.log(`Express server also listening on port ${PORT} for external connections (без БД)`);
         });
       } else {
         app.listen(PORT, () => {
