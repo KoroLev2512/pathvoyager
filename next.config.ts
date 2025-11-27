@@ -21,6 +21,26 @@ const nextConfig: NextConfig = {
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // Разрешаем изображения с текущего домена
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'pathvoyager.com',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'pathvoyager.com',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.pathvoyager.com',
+        pathname: '/uploads/**',
+      },
+    ],
+    // Отключаем оптимизацию для локальных загруженных файлов (они уже оптимизированы)
+    unoptimized: false,
   },
   
   // API rewrites для проксирования запросов к бэкенду

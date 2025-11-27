@@ -53,6 +53,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "10mb" })); // Увеличиваем лимит для больших статей
 
+// Раздача статических файлов из папки uploads
+const uploadsPath = path.join(process.cwd(), "public", "uploads");
+if (fs.existsSync(uploadsPath)) {
+  app.use("/uploads", express.static(uploadsPath));
+  console.log("Static files from uploads directory are served at /uploads");
+} else {
+  console.warn("Uploads directory does not exist:", uploadsPath);
+}
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -87,14 +96,28 @@ initialise()
       }
 
       // В проде слушаем и на socket (для Nginx), и на порту (для внешних подключений)
-      app.listen(SOCKET_PATH, () => {
+      app.listen(SOCKET_PATH, (err) => {
+        if (err) {
+          console.error(`Failed to listen on socket ${SOCKET_PATH}:`, err.message);
+          process.exit(1);
+          return;
+        }
         // Устанавливаем права доступа на socket файл
         fs.chmodSync(SOCKET_PATH, 0o666);
         console.log(`Express server listening on socket ${SOCKET_PATH}`);
       });
       
       // Также слушаем на порту для внешних подключений (например, с локальной машины)
-      app.listen(PORT, "0.0.0.0", () => {
+      app.listen(PORT, "0.0.0.0", (err) => {
+        if (err) {
+          console.error(`Failed to listen on port ${PORT}:`, err.message);
+          if (err.code === 'EADDRINUSE') {
+            console.error(`Порт ${PORT} уже занят. Остановите другой процесс или используйте другой порт.`);
+            console.error(`Для поиска процесса используйте: lsof -ti:${PORT}`);
+          }
+          // В проде не завершаем процесс, если socket работает
+          return;
+        }
         console.log(`Express server also listening on port ${PORT} for external connections`);
       });
     } else {
@@ -142,11 +165,24 @@ initialise()
           console.log(`Express server listening on socket ${SOCKET_PATH} (без БД)`);
         });
         // Также слушаем на порту для внешних подключений
-        app.listen(PORT, "0.0.0.0", () => {
+        app.listen(PORT, "0.0.0.0", (err) => {
+          if (err) {
+            console.error(`Failed to listen on port ${PORT}:`, err.message);
+            return;
+          }
           console.log(`Express server also listening on port ${PORT} for external connections (без БД)`);
         });
       } else {
-        app.listen(PORT, () => {
+        app.listen(PORT, (err) => {
+          if (err) {
+            console.error(`Failed to listen on port ${PORT}:`, err.message);
+            if (err.code === 'EADDRINUSE') {
+              console.error(`Порт ${PORT} уже занят. Остановите другой процесс или используйте другой порт.`);
+              console.error(`Для поиска процесса используйте: lsof -ti:${PORT}`);
+            }
+            process.exit(1);
+            return;
+          }
           console.log(`Express server listening on port ${PORT} (без БД)`);
         });
       }
