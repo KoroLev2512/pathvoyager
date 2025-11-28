@@ -1,5 +1,7 @@
 import type { Post } from "../model/types";
 
+const FALLBACK_IMAGE = "/images/mock.webp";
+
 // Тип статьи с бэкенда
 export type BackendArticle = {
   slug: string;
@@ -16,7 +18,7 @@ export type BackendArticle = {
 // Преобразует статью с бэкенда в формат Post
 export const transformBackendArticle = (article: BackendArticle): Post => {
   // Обрабатываем URL изображения
-  let imageUrl = article.heroImage || "/images/hero_bg.webp";
+  let imageUrl = article.heroImage || FALLBACK_IMAGE;
   
   // Если изображение - полный URL с доменом, преобразуем в относительный путь
   if (imageUrl.startsWith("https://pathvoyager.com/uploads/") || imageUrl.startsWith("http://pathvoyager.com/uploads/")) {
@@ -34,7 +36,7 @@ export const transformBackendArticle = (article: BackendArticle): Post => {
     id: article.slug,
     title: article.title,
     excerpt: article.excerpt || "",
-    image: imageUrl,
+    image: imageUrl || FALLBACK_IMAGE,
     categoryId: article.categoryId,
     authorId: article.authorName || "unknown",
     publishedAt: article.publishedAt,

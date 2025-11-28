@@ -1,8 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { SyntheticEvent } from "react";
 import { MoreIcon } from "@/shared/icons";
 import type { Category } from "@/entities/category/model/types";
 import type { Post } from "../model/types";
+
+const FALLBACK_IMAGE = "/images/mock.webp";
 
 type PostCardProps = {
   post: Post;
@@ -12,6 +15,11 @@ type PostCardProps = {
 export const PostCard = ({ post, category }: PostCardProps) => {
   // Определяем, является ли изображение загруженным (из /uploads/)
   const isUploadedImage = post.image.startsWith("/uploads/");
+  
+  const handleImageError = (event: SyntheticEvent<HTMLImageElement>) => {
+    event.currentTarget.src = FALLBACK_IMAGE;
+    event.currentTarget.onerror = null;
+  };
   
   return (
     <Link
@@ -24,18 +32,20 @@ export const PostCard = ({ post, category }: PostCardProps) => {
             // Для загруженных изображений используем обычный img тег
             // так как Next.js Image Optimization не может обработать динамически загруженные файлы
             <img
-              src={post.image}
+              src={post.image || FALLBACK_IMAGE}
               alt={post.title}
               className="h-full w-full object-cover object-center transition duration-300 group-hover:scale-105"
+              onError={handleImageError}
             />
           ) : (
             // Для статических изображений используем оптимизацию Next.js
             <Image
-              src={post.image}
+              src={post.image || FALLBACK_IMAGE}
               fill
               sizes="320px"
               className="object-cover object-center transition duration-300 group-hover:scale-105"
               alt={post.title}
+              onError={handleImageError}
             />
           )}
         </div>
