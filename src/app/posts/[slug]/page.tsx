@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import type { SyntheticEvent } from "react";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
@@ -10,6 +8,7 @@ import { articleDetailsMocks } from "@/shared/mocks/articleDetails";
 import { popularArticlesMocks, recentArticlesMocks } from "@/shared/mocks";
 
 import { getApiBaseUrl } from "@/shared/lib/getApiBaseUrl";
+import { ArticleImage } from "@/entities/post/ui/ArticleImage";
 
 const categoriesMap = Object.fromEntries(
   categories.map((category) => [category.id, category]),
@@ -373,33 +372,14 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
               </div>
 
               <div className="relative h-[420px] w-full overflow-hidden">
-                {(() => {
-                  const imageSrc = getArticleImage(article);
-                  const isUploadedImage = imageSrc.startsWith("/uploads/");
-                  const handleError = (event: SyntheticEvent<HTMLImageElement>) => {
-                    event.currentTarget.src = FALLBACK_IMAGE;
-                    event.currentTarget.onerror = null;
-                  };
-                  
-                  return isUploadedImage ? (
-                    <img
-                      src={imageSrc}
-                      alt={normalizedArticle.title}
-                      className="h-full w-full object-cover object-center"
-                      onError={handleError}
-                    />
-                  ) : (
-                    <Image
-                      src={imageSrc || FALLBACK_IMAGE}
-                      fill
-                      sizes="(min-width: 1024px) 720px, 100vw"
-                      className="object-cover object-center"
-                      alt={normalizedArticle.title}
-                      priority
-                      onError={handleError}
-                    />
-                  );
-                })()}
+                <ArticleImage
+                  src={getArticleImage(article)}
+                  alt={normalizedArticle.title}
+                  sizes="(min-width: 1024px) 720px, 100vw"
+                  priority
+                  imgClassName="h-full w-full object-cover object-center"
+                  imageClassName="object-cover object-center"
+                />
               </div>
 
               <div className="flex flex-col gap-8">
