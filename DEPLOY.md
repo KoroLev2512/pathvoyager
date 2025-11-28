@@ -52,7 +52,6 @@
    ├── server/
    ├── public/
    ├── package.json
-   ├── ecosystem.config.js
    ├── .env
    └── ...
    ```
@@ -76,26 +75,20 @@ MYSQL_USER=admin
 MYSQL_PASSWORD=aboba-2512
 MYSQL_DATABASE=pathvoyager
 
-# Server Configuration
-PORT=4000
-SOCKET_PATH=/var/www/clo/data/nodejs/1.sock
-
-# CORS Configuration
-CORS_ORIGIN=https://pathvoyager.com,https://www.pathvoyager.com
-
-# API Configuration
-API_BASE_URL=https://pathvoyager.com
-NEXT_PUBLIC_API_BASE_URL=https://pathvoyager.com
-
 # Node Environment
 NODE_ENV=production
+
+# Опционально: порт, на котором будет работать Next.js (по умолчанию 3000)
+# PORT=3000
 
 # Email Configuration
 ADMIN_EMAIL=webmaster@pathvoyager.com
 
 # Uploads Directory (для продакшена используйте абсолютный путь)
-# В ecosystem.config.js уже настроено, но можно также добавить в .env:
 # UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads
+
+# Опционально: переопределить базовый URL API на клиенте (по умолчанию текущий домен)
+# NEXT_PUBLIC_API_BASE_URL=https://pathvoyager.com
 ```
 
 **Важно:** Убедитесь, что файл `.env` имеет правильные права доступа (обычно `644` или `600`).
@@ -141,50 +134,36 @@ npm run build
    - **Путь к приложению:** `/var/www/clo/data/www/pathvoyager.com`
    - **Путь к Node.js:** `/var/www/clo/data/.nvm/versions/node/v25.2.0/bin/node`
    - **Путь к Npm:** `/var/www/clo/data/.nvm/versions/node/v25.2.0/bin/npm`
-   - **Команда запуска:** `npm start` (для Next.js фронтенда)
-   - **Сокет:** `/var/www/clo/data/nodejs/1.sock` (для бэкенд API)
+   - **Команда запуска:** `npm start`
+   - **Порт:** `3000` (или любой свободный порт, который будет проксироваться Nginx)
    - **Переменные окружения:** добавьте переменные из `.env` файла или используйте файл `.env` напрямую
 
 5. Сохраните настройки
 
-### Шаг 6: Настройка бэкенд-сервера (Express)
+### Шаг 6 (опционально): Запуск через PM2
 
-#### Вариант 1: Через PM2 (рекомендуется)
+Если вы предпочитаете управлять процессом через PM2:
 
-1. Установите PM2 глобально (если еще не установлен):
+1. Установите PM2 (если еще не установлен):
    ```bash
    /var/www/clo/data/.nvm/versions/node/v25.2.0/bin/npm install -g pm2
    ```
-
-2. Файл `ecosystem.config.js` уже создан в корне проекта с правильными настройками:
-   - Использует Unix socket: `/var/www/clo/data/nodejs/1.sock`
-   - Настроен для production окружения
-   - Указан абсолютный путь для uploads: `UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads`
-
-3. Запустите через PM2:
+2. Запустите приложение:
    ```bash
    cd /var/www/clo/data/www/pathvoyager.com
    export PATH="/var/www/clo/data/.nvm/versions/node/v25.2.0/bin:$PATH"
-   pm2 start ecosystem.config.js
+   pm2 start npm --name pathvoyager-app -- run start
    pm2 save
    pm2 startup
    ```
-
-4. Проверьте статус:
+3. Управление:
    ```bash
    pm2 status
-   pm2 logs pathvoyager-api
+   pm2 logs pathvoyager-app
+   pm2 restart pathvoyager-app
    ```
 
-#### Вариант 2: Через ISPmanager (Node.js приложение)
-
-1. Создайте второе Node.js приложение для API:
-   - **Домен:** `pathvoyager.com` (тот же домен, но другой обработчик)
-   - **Путь:** `/var/www/clo/data/www/pathvoyager.com`
-   - **Путь к Node.js:** `/var/www/clo/data/.nvm/versions/node/v25.2.0/bin/node`
-   - **Команда запуска:** `node server/index.js`
-   - **Сокет:** `/var/www/clo/data/nodejs/1.sock`
-   - **Переменные окружения:** используйте файл `.env` или добавьте вручную
+> После миграции на Next.js API Routes отдельный Express-сервер больше не требуется — все API и фронтенд работают через один процесс `npm start` (или PM2, если используете его).
 
 ### Шаг 7: Настройка Nginx (если требуется)
 
@@ -212,7 +191,7 @@ server {
     proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=pathvoyager_cache:10m max_size=1g inactive=24h;
     
     location / {
-        proxy_pass http://unix:/var/www/clo/data/nodejs/1.sock;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -251,7 +230,7 @@ server {
     
     # API endpoints
     location /api/ {
-        proxy_pass http://unix:/var/www/clo/data/nodejs/1.sock;
+        proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -288,7 +267,7 @@ server {
 3. Проверьте админ-панель: `https://pathvoyager.com/admin`
 4. Проверьте логи:
    ```bash
-   pm2 logs pathvoyager-api
+   pm2 logs pathvoyager-app  # если используете PM2
    # или через ISPmanager: Журналы сайта → Журнал ошибок / Журнал запросов
    ```
 
@@ -309,8 +288,8 @@ npm install --production
 # Сборка Next.js приложения
 npm run build
 
-# Перезапуск бэкенд API (если используете PM2)
-pm2 restart pathvoyager-api
+# Перезапуск приложения (после сборки)
+pm2 restart pathvoyager-app  # если используете PM2
 
 # Или перезапустите через ISPmanager: WWW → Node.js приложения → Перезапустить
 ```
@@ -331,37 +310,9 @@ pm2 restart pathvoyager-api
    mysql -h localhost -u admin -p pathvoyager
    # Введите пароль: aboba-2512
    ```
-5. Проверьте логи приложения:
+5. Проверьте логи приложения через ISPmanager или командой:
    ```bash
-   pm2 logs pathvoyager-api --lines 50
-   ```
-
-### Проблема: Unix socket не создается
-
-**Решение:**
-1. Проверьте права доступа к директории `/var/www/clo/data/nodejs/`:
-   ```bash
-   ls -la /var/www/clo/data/nodejs/
-   ```
-2. Убедитесь, что директория существует и доступна для записи:
-   ```bash
-   sudo mkdir -p /var/www/clo/data/nodejs
-   sudo chown -R www-data:www-data /var/www/clo/data/nodejs
-   sudo chmod 755 /var/www/clo/data/nodejs
-   ```
-3. Проверьте, что в `.env` указан правильный путь: `SOCKET_PATH=/var/www/clo/data/nodejs/1.sock`
-
-### Проблема: CORS ошибки
-
-**Решение:**
-1. Убедитесь, что `CORS_ORIGIN` в `.env` содержит правильные домены:
-   ```
-   CORS_ORIGIN=https://pathvoyager.com,https://www.pathvoyager.com
-   ```
-2. Проверьте, что фронтенд и бэкенд используют правильные URL
-3. Перезапустите приложение после изменения `.env`:
-   ```bash
-   pm2 restart pathvoyager-api
+   tail -n 200 /var/www/clo/data/www/pathvoyager.com/.logs/nodejs.log
    ```
 
 ### Проблема: Статические файлы не загружаются
@@ -390,9 +341,9 @@ pm2 restart pathvoyager-api
 2. **Проверьте, где сервер сохраняет файлы:**
    ```bash
    # Проверьте логи PM2, чтобы увидеть путь к uploads директории:
-   pm2 logs pathvoyager-api --lines 100 | grep -i upload
+   pm2 logs pathvoyager-app --lines 100 | grep -i upload
    # Или проверьте последние логи после загрузки файла:
-   pm2 logs pathvoyager-api --lines 50
+   pm2 logs pathvoyager-app --lines 50
    ```
 
 3. **Найдите все файлы uploads на сервере:**
@@ -428,9 +379,9 @@ pm2 restart pathvoyager-api
    - Перезагрузите Nginx: `nginx -t && systemctl reload nginx`
 
 2. **Убедитесь, что файлы сохраняются в правильную директорию:**
-   - В `ecosystem.config.js` уже настроено `UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads`
-   - Перезапустите PM2, чтобы применить изменения: `pm2 restart pathvoyager-api`
-   - Проверьте логи после перезапуска: `pm2 logs pathvoyager-api --lines 20 | grep -i upload`
+   - В `.env` установите `UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads`
+   - Перезапустите PM2, чтобы применить изменения: `pm2 restart pathvoyager-app`
+   - Проверьте логи после перезапуска: `pm2 logs pathvoyager-app --lines 20 | grep -i upload`
    - Должно быть сообщение: `Uploads directory: /var/www/clo/data/www/pathvoyager.com/public/uploads`
 
 3. **Проверьте, что директория существует:**
@@ -441,7 +392,7 @@ pm2 restart pathvoyager-api
    ```
 
 4. **Если файлы сохраняются в другую директорию:**
-   - Проверьте логи PM2, чтобы увидеть фактический путь к uploads: `pm2 logs pathvoyager-api | grep "File uploaded"`
+   - Проверьте логи PM2, чтобы увидеть фактический путь к uploads: `pm2 logs pathvoyager-app | grep "File uploaded"`
    - Если файлы в `.next/standalone/public/uploads/`, переместите их:
      ```bash
      mkdir -p /var/www/clo/data/www/pathvoyager.com/public/uploads
@@ -456,58 +407,58 @@ pm2 restart pathvoyager-api
      # Замените <найденный_путь> на фактический путь
      cp <найденный_путь>/*.png /var/www/clo/data/www/pathvoyager.com/public/uploads/
      ```
-   - После перемещения файлов перезапустите PM2: `pm2 restart pathvoyager-api`
+   - После перемещения файлов перезапустите PM2: `pm2 restart pathvoyager-app`
 
-5. **Временное решение - использовать API route:**
-   - API route `/api/uploads/[...path]` уже создан и будет работать как fallback
-   - Но это менее эффективно, чем прямая раздача через Nginx
+5. **Проверьте, что Next.js раздает `/public/uploads`:**
+   - После загрузки файла проверьте `https://pathvoyager.com/uploads/<имя>`
+   - Если файл открывается, всё настроено корректно
 
-### Проблема: Порт 4000 уже занят (EADDRINUSE)
+### Проблема: Порт приложения уже занят (EADDRINUSE)
 
 **Решение:**
-Это означает, что сервер уже запущен. Не запускайте сервер вручную через `npm run server` на продакшене!
+Это означает, что сервер уже запущен. Не запускайте сервер вручную через `npm run start` на продакшене!
 
 1. **Проверьте статус PM2:**
    ```bash
    pm2 status
-   pm2 logs pathvoyager-api --lines 50
+   pm2 logs pathvoyager-app --lines 50
    ```
 
 2. **Если сервер запущен через PM2, используйте команды PM2:**
    ```bash
    # Перезапустить сервер
-   pm2 restart pathvoyager-api
+   pm2 restart pathvoyager-app
    
    # Остановить сервер
-   pm2 stop pathvoyager-api
+   pm2 stop pathvoyager-app
    
    # Удалить из PM2
-   pm2 delete pathvoyager-api
+   pm2 delete pathvoyager-app
    ```
 
 3. **Если нужно запустить сервер заново через PM2:**
    ```bash
    cd /var/www/clo/data/www/pathvoyager.com
    export PATH="/var/www/clo/data/.nvm/versions/node/v25.2.0/bin:$PATH"
-   pm2 start ecosystem.config.js
+   pm2 start npm --name pathvoyager-app -- run start
    pm2 save
    ```
 
 4. **Если нужно запустить вручную для отладки (не рекомендуется на продакшене):**
    - Сначала остановите PM2 процесс:
      ```bash
-     pm2 stop pathvoyager-api
+    pm2 stop pathvoyager-app
      ```
    - Или используйте другой порт:
      ```bash
-     PORT=4001 npm run server
+    PORT=4001 npm run start
      ```
 
-5. **Проверьте, какой процесс занимает порт 4000:**
+5. **Проверьте, какой процесс занимает указанный порт (по умолчанию 3000):**
    ```bash
-   lsof -i :4000
+   lsof -i :3000
    # Или
-   netstat -tulpn | grep 4000
+   netstat -tulpn | grep 3000
    ```
 
 ### Проблема: Node.js версия не соответствует
@@ -520,8 +471,8 @@ pm2 restart pathvoyager-api
 2. В ISPmanager проверьте путь к Node.js: `/var/www/clo/data/.nvm/versions/node/v25.2.0/bin/node`
 3. В PM2 используйте правильный путь:
    ```bash
-   pm2 delete pathvoyager-api
-   /var/www/clo/data/.nvm/versions/node/v25.2.0/bin/pm2 start ecosystem.config.js
+   pm2 delete pathvoyager-app
+   /var/www/clo/data/.nvm/versions/node/v25.2.0/bin/pm2 start npm --name pathvoyager-app -- run start
    ```
 
 ## Дополнительные настройки
@@ -537,8 +488,8 @@ pm2 restart pathvoyager-api
 
 1. **Логирование через PM2:**
    ```bash
-   pm2 logs pathvoyager-api
-   pm2 logs pathvoyager-api --lines 100
+   pm2 logs pathvoyager-app
+   pm2 logs pathvoyager-app --lines 100
    pm2 monit
    ```
 
@@ -551,7 +502,7 @@ pm2 restart pathvoyager-api
 3. **Мониторинг производительности:**
    ```bash
    pm2 status
-   pm2 info pathvoyager-api
+   pm2 info pathvoyager-app
    ```
 
 ### Резервное копирование
@@ -562,7 +513,7 @@ pm2 restart pathvoyager-api
 
 2. **Файлы проекта:**
    - Регулярно делайте бэкапы директории `/var/www/clo/data/www/pathvoyager.com`
-   - Особенно важны: `.env`, `ecosystem.config.js`, `package.json`
+   - Особенно важны: `.env`, `package.json`, `package-lock.json`
 
 3. **Ручной бэкап БД:**
    ```bash
@@ -588,7 +539,7 @@ pm2 restart pathvoyager-api
 При возникновении проблем проверьте:
 
 - **Логи приложения:** 
-  - PM2: `pm2 logs pathvoyager-api`
+ - PM2: `pm2 logs pathvoyager-app`
   - ISPmanager: Журналы сайта → Журнал ошибок / Журнал запросов
   
 - **Логи Nginx:** `/var/log/nginx/error.log` (если есть доступ)

@@ -189,8 +189,8 @@ export default function AdminPage() {
               console.warn("Local backend health check failed:", healthResponse.status);
               clearTimeout(timeoutId);
               setError(
-                `Локальный бэкенд не отвечает (${healthResponse.status}). ` +
-                `Убедитесь, что бэкенд запущен: выполните 'npm run server' в отдельном терминале.`
+                `Локальное приложение не отвечает (${healthResponse.status}). ` +
+                `Убедитесь, что Next.js запущен командой 'npm run dev' в отдельном терминале.`
               );
               return;
             } else {
@@ -202,14 +202,14 @@ export default function AdminPage() {
             const isAbortError = healthErr instanceof Error && healthErr.name === "AbortError";
             if (isAbortError || (healthErr instanceof Error && healthErr.message.includes("Failed to fetch"))) {
               setError(
-                `Локальный бэкенд недоступен. ` +
-                `Запустите бэкенд командой 'npm run server' в отдельном терминале. ` +
-                `Бэкенд должен слушать на порту 4000.`
+                `Локальное приложение недоступно. ` +
+                `Запустите Next.js командой 'npm run dev' в отдельном терминале. ` +
+                `По умолчанию сервер слушает на порту 3000.`
               );
             } else {
               setError(
-                `Ошибка подключения к локальному бэкенду: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}. ` +
-                `Убедитесь, что бэкенд запущен на порту 4000.`
+                `Ошибка подключения к локальному приложению: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}. ` +
+                `Убедитесь, что Next.js запущен на порту 3000.`
               );
             }
             return;
@@ -263,15 +263,13 @@ export default function AdminPage() {
           if (!apiBaseUrl || apiBaseUrl === "") {
             // Локальный бэкенд - вероятно не запущен
             setError(
-              `Локальный бэкенд не запущен или недоступен (${response.status}). ` +
-              `Запустите бэкенд командой 'npm run server' в отдельном терминале. ` +
-              `Бэкенд должен слушать на порту 4000. ` +
-              `Запрос попал в Next.js вместо Express бэкенда.`
+              `Локальный API маршрут недоступен (${response.status}). ` +
+              `Запустите проект командой 'npm run dev' в отдельном терминале. ` +
+              `Сервер должен слушать на порту 3000.`
             );
           } else {
             setError(
               `Получен неверный ответ от сервера (${response.status}). ` +
-              `Возможно, запрос попал в Next.js вместо Express бэкенда. ` +
               `Проверьте URL: ${url}`
             );
           }
@@ -283,8 +281,8 @@ export default function AdminPage() {
           console.error("Failed to load articles:", response.status, errorText.substring(0, 200));
           setError(
             `Не удалось загрузить статьи (${response.status}). ` +
-            `Проверьте подключение к бэкенду: ${apiBaseUrl || "локальный"}. ` +
-            `Если используете удаленный бэкенд, убедитесь, что порт 4000 открыт.`
+            `Проверьте подключение к API: ${apiBaseUrl || "локальный"}. ` +
+            `Если используете удаленную среду, убедитесь, что выбранный порт открыт.`
           );
           return;
         }
@@ -299,8 +297,8 @@ export default function AdminPage() {
         
         if (isAbortError || errorMessage.includes("timeout") || errorMessage.includes("Failed to fetch")) {
           setError(
-            `Таймаут подключения к бэкенду: ${apiBaseUrl || "локальный"}. ` +
-            `Проверьте, что бэкенд запущен и порт 4000 доступен извне. ` +
+            `Таймаут подключения к API: ${apiBaseUrl || "локальный"}. ` +
+            `Проверьте, что приложение запущено и нужный порт (по умолчанию 3000) доступен извне. ` +
             `Если используете удаленный бэкенд, убедитесь, что порт открыт в файрволе.`
           );
         } else {
@@ -797,6 +795,7 @@ export default function AdminPage() {
                     <div className="flex flex-col items-center gap-3 px-6 py-8 text-center">
                       {form.heroImage ? (
                         <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={form.heroImage}
                             alt="Preview"

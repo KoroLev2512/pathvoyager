@@ -46,32 +46,19 @@ DB_NAME=pathvoyager
 # MYSQL_PASSWORD=aboba-2512
 # MYSQL_DATABASE=pathvoyager
 
-# CORS настройки (разрешенные источники для API)
-CORS_ORIGIN=http://localhost:3000
+# Директория для загруженных изображений (опционально)
+# UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads
 
-# URL бэкенд-сервера
-API_BASE_URL=http://localhost:4000
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
-
-# Порт бэкенд-сервера (опционально, по умолчанию 4000)
-PORT=4000
+# Опционально: переопределить базовый URL API на клиенте
+# По умолчанию используется тот же домен, что и фронтенд
+# NEXT_PUBLIC_API_BASE_URL=https://pathvoyager.com
 ```
 
 **Примечание:** Таблица `articles` будет создана автоматически при первом запуске сервера.
 
-### 3. Запуск бэкенд-сервера
+### 3. Запуск приложения (фронт + API)
 
-В отдельном терминале запустите Express-сервер:
-
-```bash
-npm run server
-```
-
-Сервер автоматически создаст таблицу `articles` при первом запуске. Сервер будет доступен на `http://localhost:4000`.
-
-### 4. Запуск Next.js приложения
-
-В другом терминале запустите фронтенд:
+Next.js теперь включает API-роуты, поэтому достаточно одного процесса:
 
 ```bash
 npm run dev
@@ -110,7 +97,7 @@ npm run dev
 - `src/widgets/` — виджеты (header, footer, секции)
 - `src/entities/` — сущности (посты, категории, авторы)
 - `src/shared/` — общие компоненты, утилиты, иконки
-- `server/` — Express-бэкенд с API для статей
+- `src/server/` — серверные утилиты (подключение к MySQL, сохранение загрузок)
 - `public/` — статические файлы (изображения)
 
 ## Страницы и функциональность
@@ -154,6 +141,7 @@ npm run dev
 - `GET /api/articles/:slug` — получить статью по слагу
 - `POST /api/articles` — создать/обновить статью (upsert по слагу)
 - `DELETE /api/articles/:slug` — удалить статью
+- `POST /api/upload` — загрузить изображение и получить относительный URL
 - `GET /health` — проверка здоровья сервера
 
 ## SEO
@@ -170,7 +158,6 @@ npm run dev
 ## Скрипты
 
 - `npm run dev` — запуск Next.js в режиме разработки
-- `npm run server` — запуск Express-бэкенда
 - `npm run build` — сборка Next.js приложения
 - `npm run start` — запуск production-версии Next.js
 - `npm run lint` — проверка кода линтером
@@ -185,9 +172,8 @@ npm run dev
   - Next.js Image Optimization
 
 - **Backend:**
-  - Express.js
+  - Next.js API Routes (Node runtime)
   - MySQL (mysql2)
-  - CORS
 
 - **Архитектура:**
   - Feature-Sliced Design (FSD)

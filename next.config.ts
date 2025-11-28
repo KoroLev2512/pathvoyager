@@ -42,35 +42,6 @@ const nextConfig: NextConfig = {
     unoptimized: false,
   },
   
-  // API rewrites для проксирования запросов к бэкенду
-  async rewrites() {
-    const apiBaseUrl = process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
-    
-    // Если API_BASE_URL не установлен, проксируем к локальному серверу в development
-    if (!apiBaseUrl || apiBaseUrl.includes('localhost')) {
-      return [
-        {
-          source: '/api/:path*',
-          destination: 'http://localhost:4000/api/:path*',
-        },
-        // Проксируем запросы к загруженным файлам на бэкенд
-        {
-          source: '/uploads/:path*',
-          destination: 'http://localhost:4000/uploads/:path*',
-        },
-        // Проксируем health check
-        {
-          source: '/health',
-          destination: 'http://localhost:4000/health',
-        }
-      ];
-    }
-    
-    // В продакшене Nginx будет проксировать запросы напрямую к Unix socket
-    // Поэтому rewrites не нужны
-    return [];
-  },
-  
   // Security headers
   async headers() {
     return [
