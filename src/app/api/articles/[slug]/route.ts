@@ -5,12 +5,10 @@ import { getDbPoolSafe } from "@/server/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RouteParams = {
-  params: { slug: string };
-};
+type RouteParams = Promise<{ slug: string }>;
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
-  const { slug } = params;
+export async function GET(_request: NextRequest, context: { params: RouteParams }) {
+  const { slug } = await context.params;
   try {
     const pool = await getDbPoolSafe();
     if (!pool) {
@@ -33,8 +31,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
-  const { slug } = params;
+export async function DELETE(_request: NextRequest, context: { params: RouteParams }) {
+  const { slug } = await context.params;
   try {
     const pool = await getDbPoolSafe();
     if (!pool) {
