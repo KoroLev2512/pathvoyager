@@ -48,3 +48,6 @@ logs/
 # Uploaded files (keep directory structure)
 public/uploads/*
 !public/uploads/.gitkeep
+
+# Empty package stub for baseline-browser-mapping override
+empty-package/

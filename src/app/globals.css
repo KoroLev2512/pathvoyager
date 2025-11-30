@@ -51,3 +51,12 @@ body {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Apply cursor-pointer to the native date picker indicator */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+input[type="date"]::-moz-calendar-picker-indicator {
+  cursor: pointer;
+}

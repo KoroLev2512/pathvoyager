@@ -105,6 +105,7 @@ export default function RootLayout({
       <body
         className={`${playfairDisplay.variable} ${openSans.variable} ${inter.variable} antialiased`}
       >
+        <link rel="stylesheet" href="/gravity-ui-styles.css" />
         {children}
       </body>
     </html>

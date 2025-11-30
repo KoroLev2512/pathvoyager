@@ -4,6 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
 import { categories } from "@/entities/category/model/data";
+import { useMarkdownEditor, MarkdownEditorView, MarkdownEditorProvider } from "@gravity-ui/markdown-editor";
+import { ToasterProvider, ThemeProvider } from "@gravity-ui/uikit";
+import { toaster } from "@gravity-ui/uikit/toaster-singleton";
 
 import { getApiBaseUrl } from "@/shared/lib/getApiBaseUrl";
 
@@ -139,6 +142,48 @@ export default function AdminPage() {
   const [dragActive, setDragActive] = useState(false);
 
   const categoryOptions = useMemo(() => categories, []);
+
+
+  // Markdown Editor
+  const editor = useMarkdownEditor(
+    {
+      md: {
+        html: false,
+      },
+    },
+    []
+  );
+
+  // Флаг для предотвращения циклических обновлений
+  // Загрузка контента в редактор при смене статьи (по slug)
+  useEffect(() => {
+    if (!editor) return;
+
+    const currentValue = editor.getValue();
+    if (currentValue !== (form.contentRaw || '')) {
+      editor.replace(form.contentRaw || '');
+    }
+  }, [editor, form.slug]);
+
+  // Обновление состояния формы при изменении в редакторе
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleEditorChange = () => {
+      const value = editor.getValue();
+      setForm((prev) => {
+        if (prev.contentRaw !== value) {
+          return { ...prev, contentRaw: value };
+        }
+        return prev;
+      });
+    };
+
+    editor.on('change', handleEditorChange);
+    return () => {
+      editor.off('change', handleEditorChange);
+    };
+  }, [editor]);
   
   // Определяем, к какому бэкенду подключены
   const apiBaseUrl = useMemo(() => {
@@ -576,9 +621,11 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col bg-white">
-      <div className="flex-1">
-        <SiteHeader />
+    <ThemeProvider theme="light">
+      <ToasterProvider toaster={toaster}>
+        <div className="flex min-h-screen w-full flex-col bg-white">
+        <div className="flex-1">
+          <SiteHeader />
 
         <main className="w-full bg-white">
         <div className="mx-auto flex w-full max-w-[1160px] flex-col gap-[60px] px-4 py-16 max-[400px]:max-w-[340px] max-[400px]:px-[10px]">
@@ -699,10 +746,10 @@ export default function AdminPage() {
                     <select
                       value={form.categoryId}
                       onChange={(event) => handleChange("categoryId")(event.target.value)}
-                      className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                      className="appearance-none rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none cursor-pointer bg-no-repeat bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23767676%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20%2F%3E%3C%2Fsvg%3E')] bg-[position:right_0.5rem_center] bg-[size:1.5em_1.5em]"
                     >
                       {categoryOptions.map((category) => (
-                        <option key={category.id} value={category.id}>
+                        <option key={category.id} value={category.id} className="cursor-pointer">
                           {category.title}
                         </option>
                       ))}
@@ -856,13 +903,26 @@ export default function AdminPage() {
                   <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
                     Контент статьи
                   </span>
-                  <textarea
-                    required
-                    value={form.contentRaw}
-                    onChange={(event) => handleChange("contentRaw")(event.target.value)}
-                    className="min-h-[220px] rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
-                    placeholder={`# Заголовок блока\nКороткий абзац\n- пункт списка`}
-                  />
+                  <div
+                    className="min-h-[400px] rounded-lg border border-[#d6d6d6] overflow-hidden"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
+                    {editor && (
+                      <MarkdownEditorProvider value={editor}>
+                                                  <MarkdownEditorView
+                                                    editor={editor}
+                                                    stickyToolbar
+                                                    className="min-h-[400px] px-4"
+                                                  />                      </MarkdownEditorProvider>
+                    )}
+                  </div>
                 </label>
 
                 <button
@@ -968,5 +1028,7 @@ export default function AdminPage() {
       </div>
       <SiteFooter />
     </div>
+      </ToasterProvider>
+    </ThemeProvider>
   );
 }

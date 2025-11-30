@@ -7,6 +7,21 @@ const nextConfig: NextConfig = {
   
   // Output configuration
   output: 'standalone',
+
+  // Webpack configuration for Gravity UI
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@gravity-ui/uikit/legacy": "@gravity-ui/uikit/legacy",
+    };
+    // Игнорируем Node.js модули в клиентском коде
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+    };
+    return config;
+  },
   
   // Compiler optimizations for modern browsers
   compiler: {

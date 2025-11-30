@@ -12,7 +12,9 @@ export async function GET(
   context: { params: Promise<{ slug: string[] }> }
 ) {
   try {
-    const { slug } = await context.params;
+    const resolvedParams = await context.params;
+    const { slug } = resolvedParams;
+
     if (!slug || slug.length === 0) {
       return new NextResponse("File not found", { status: 404 });
     }

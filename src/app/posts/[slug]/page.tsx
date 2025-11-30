@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import React from "react";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "@/widgets/site-footer/ui/SiteFooter";
 import { SiteHeader } from "@/widgets/site-header/ui/SiteHeader";
@@ -156,6 +157,71 @@ const fetchArticleFromApi = async (slug: string): Promise<ArticleResponse | null
   }
 };
 
+// Функция для парсинга inline markdown
+const parseInlineMarkdown = (text: string): React.ReactNode => {
+  if (!text) return text;
+  
+  const parts: React.ReactNode[] = [];
+  let key = 0;
+  let processedText = text;
+
+  // Сначала заменяем все **bold** на плейсхолдеры
+  const boldPlaceholders: { [key: string]: string } = {};
+  let boldCounter = 0;
+  processedText = processedText.replace(/\*\*(.+?)\*\*/g, (match, content) => {
+    const placeholder = `__BOLD_${boldCounter}__`;
+    boldPlaceholders[placeholder] = content;
+    boldCounter++;
+    return placeholder;
+  });
+
+  // Затем заменяем ==highlight== и ++highlight++
+  const markPlaceholders: { [key: string]: string } = {};
+  let markCounter = 0;
+  processedText = processedText.replace(/==(.+?)==|\+\+(.+?)\+\+/g, (match, content1, content2) => {
+    const placeholder = `__MARK_${markCounter}__`;
+    markPlaceholders[placeholder] = content1 || content2;
+    markCounter++;
+    return placeholder;
+  });
+
+  // Теперь обрабатываем *italic* (не **, так как они уже заменены)
+  const italicPlaceholders: { [key: string]: string } = {};
+  let italicCounter = 0;
+  processedText = processedText.replace(/\*([^*\n]+?)\*/g, (match, content) => {
+    const placeholder = `__ITALIC_${italicCounter}__`;
+    italicPlaceholders[placeholder] = content;
+    italicCounter++;
+    return placeholder;
+  });
+
+  // Разбиваем на части и восстанавливаем форматирование
+  const tokens = processedText.split(/(__\w+_\d+__)/g);
+  
+  tokens.forEach((token) => {
+    if (token.startsWith('__BOLD_')) {
+      const content = boldPlaceholders[token];
+      if (content) {
+        parts.push(<strong key={key++}>{parseInlineMarkdown(content)}</strong>);
+      }
+    } else if (token.startsWith('__MARK_')) {
+      const content = markPlaceholders[token];
+      if (content) {
+        parts.push(<mark key={key++} className="bg-yellow-200 px-1">{parseInlineMarkdown(content)}</mark>);
+      }
+    } else if (token.startsWith('__ITALIC_')) {
+      const content = italicPlaceholders[token];
+      if (content) {
+        parts.push(<em key={key++}>{parseInlineMarkdown(content)}</em>);
+      }
+    } else if (token) {
+      parts.push(token);
+    }
+  });
+
+  return parts.length > 0 ? <>{parts}</> : text;
+};
+
 const renderContentBlock = (
   block: ArticleResponse["content"][number],
   index: number,
@@ -167,19 +233,19 @@ const renderContentBlock = (
           key={`heading-${index}`}
           className="font-playfair text-[28px] font-normal leading-[110%] text-[#333333]"
         >
-          {block.text}
+          {parseInlineMarkdown(block.text)}
         </h2>
       );
     case "paragraph":
       return (
         <p key={`paragraph-${index}`} className="font-open-sans text-base leading-[1.7] text-[#333333]">
-          {block.text}
+          {parseInlineMarkdown(block.text)}
         </p>
       );
     case "quote":
       return (
         <blockquote key={`quote-${index}`} className="border-l-4 border-[#114b5f] pl-5">
-          <p className="font-playfair text-xl leading-[1.6] text-[#114b5f]">{block.text}</p>
+          <p className="font-playfair text-xl leading-[1.6] text-[#114b5f]">{parseInlineMarkdown(block.text)}</p>
           {block.author && (
             <cite className="mt-2 block font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
               {block.author}
@@ -190,9 +256,9 @@ const renderContentBlock = (
     case "list":
       return (
         <ul key={`list-${index}`} className="ml-5 list-disc space-y-2">
-          {block.items.map((item) => (
-            <li key={item} className="font-open-sans text-base leading-[1.7] text-[#333333]">
-              {item}
+          {block.items.map((item, itemIndex) => (
+            <li key={`${index}-${itemIndex}`} className="font-open-sans text-base leading-[1.7] text-[#333333]">
+              {parseInlineMarkdown(item)}
             </li>
           ))}
         </ul>
