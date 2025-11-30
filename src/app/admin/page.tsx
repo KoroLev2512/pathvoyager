@@ -178,7 +178,7 @@ export default function AdminPage() {
             const healthController = new AbortController();
             const healthTimeoutId = setTimeout(() => healthController.abort(), 3000);
             
-            const healthResponse = await fetch("/health", {
+            const healthResponse = await fetch("/api/health", {
               method: "GET",
               signal: healthController.signal,
             });
@@ -217,9 +217,7 @@ export default function AdminPage() {
         } else {
           // Продакшн или удаленный бэкенд - проверяем через /health
           try {
-            const healthUrl = apiBaseUrl.includes("/api") 
-              ? apiBaseUrl.replace("/api/articles", "/health")
-              : `${apiBaseUrl}/health`;
+            const healthUrl = `${apiBaseUrl}/api/health`;
             console.log("Checking backend health at:", healthUrl);
             
             const healthController = new AbortController();
