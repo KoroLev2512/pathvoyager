@@ -111,14 +111,16 @@ type ArticleResponse = {
   readTime?: string;
   publishedAt?: string;
   content: Array<
-    |
-      {
-        type: "heading" | "paragraph";
-        text: string;
-      }
+    | { type: "heading"; level: number; text: string }
+    | { type: "paragraph"; text: string }
     | { type: "quote"; text: string; author?: string }
-    | { type: "list"; items: string[] }
+    | { type: "list"; items: string[]; ordered?: boolean }
     | { type: "banner"; id: string }
+    | { type: "code"; code: string; language?: string }
+    | { type: "table"; headers: string[]; rows: string[][] }
+    | { type: "hr" }
+    | { type: "link"; text: string; url: string }
+    | { type: "image"; alt: string; url: string }
   >;
 };
 
@@ -175,13 +177,23 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
     return placeholder;
   });
 
-  // Затем заменяем ==highlight== и ++highlight++
+  // Затем заменяем ==highlight== (выделение желтым)
   const markPlaceholders: { [key: string]: string } = {};
   let markCounter = 0;
-  processedText = processedText.replace(/==(.+?)==|\+\+(.+?)\+\+/g, (match, content1, content2) => {
+  processedText = processedText.replace(/==(.+?)==/g, (match, content) => {
     const placeholder = `__MARK_${markCounter}__`;
-    markPlaceholders[placeholder] = content1 || content2;
+    markPlaceholders[placeholder] = content;
     markCounter++;
+    return placeholder;
+  });
+
+  // Затем заменяем ++underline++ (подчеркивание)
+  const underlinePlaceholders: { [key: string]: string } = {};
+  let underlineCounter = 0;
+  processedText = processedText.replace(/\+\+(.+?)\+\+/g, (match, content) => {
+    const placeholder = `__UNDERLINE_${underlineCounter}__`;
+    underlinePlaceholders[placeholder] = content;
+    underlineCounter++;
     return placeholder;
   });
 
@@ -209,6 +221,11 @@ const parseInlineMarkdown = (text: string): React.ReactNode => {
       if (content) {
         parts.push(<mark key={key++} className="bg-yellow-200 px-1">{parseInlineMarkdown(content)}</mark>);
       }
+    } else if (token.startsWith('__UNDERLINE_')) {
+      const content = underlinePlaceholders[token];
+      if (content) {
+        parts.push(<u key={key++}>{parseInlineMarkdown(content)}</u>);
+      }
     } else if (token.startsWith('__ITALIC_')) {
       const content = italicPlaceholders[token];
       if (content) {
@@ -227,15 +244,36 @@ const renderContentBlock = (
   index: number,
 ) => {
   switch (block.type) {
-    case "heading":
-      return (
-        <h2
-          key={`heading-${index}`}
-          className="font-playfair text-[28px] font-normal leading-[110%] text-[#333333]"
-        >
-          {parseInlineMarkdown(block.text)}
-        </h2>
-      );
+    case "heading": {
+      const level = Math.min(Math.max(block.level, 1), 6);
+      const headingClasses = {
+        1: "font-playfair text-4xl font-normal leading-[110%] text-[#333333]",
+        2: "font-playfair text-[28px] font-normal leading-[110%] text-[#333333]",
+        3: "font-playfair text-2xl font-normal leading-[110%] text-[#333333]",
+        4: "font-playfair text-xl font-normal leading-[110%] text-[#333333]",
+        5: "font-playfair text-lg font-normal leading-[110%] text-[#333333]",
+        6: "font-playfair text-base font-normal leading-[110%] text-[#333333]",
+      };
+      const className = headingClasses[level as keyof typeof headingClasses] || headingClasses[2];
+      const content = parseInlineMarkdown(block.text);
+      
+      switch (level) {
+        case 1:
+          return <h1 key={`heading-${index}`} className={className}>{content}</h1>;
+        case 2:
+          return <h2 key={`heading-${index}`} className={className}>{content}</h2>;
+        case 3:
+          return <h3 key={`heading-${index}`} className={className}>{content}</h3>;
+        case 4:
+          return <h4 key={`heading-${index}`} className={className}>{content}</h4>;
+        case 5:
+          return <h5 key={`heading-${index}`} className={className}>{content}</h5>;
+        case 6:
+          return <h6 key={`heading-${index}`} className={className}>{content}</h6>;
+        default:
+          return <h2 key={`heading-${index}`} className={className}>{content}</h2>;
+      }
+    }
     case "paragraph":
       return (
         <p key={`paragraph-${index}`} className="font-open-sans text-base leading-[1.7] text-[#333333]">
@@ -244,7 +282,7 @@ const renderContentBlock = (
       );
     case "quote":
       return (
-        <blockquote key={`quote-${index}`} className="border-l-4 border-[#114b5f] pl-5">
+        <blockquote key={`quote-${index}`} className="border-l-4 border-[#114b5f] pl-5 my-4">
           <p className="font-playfair text-xl leading-[1.6] text-[#114b5f]">{parseInlineMarkdown(block.text)}</p>
           {block.author && (
             <cite className="mt-2 block font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
@@ -254,6 +292,17 @@ const renderContentBlock = (
         </blockquote>
       );
     case "list":
+      if (block.ordered) {
+        return (
+          <ol key={`list-${index}`} className="ml-5 list-decimal space-y-2">
+            {block.items.map((item, itemIndex) => (
+              <li key={`${index}-${itemIndex}`} className="font-open-sans text-base leading-[1.7] text-[#333333]">
+                {parseInlineMarkdown(item)}
+              </li>
+            ))}
+          </ol>
+        );
+      }
       return (
         <ul key={`list-${index}`} className="ml-5 list-disc space-y-2">
           {block.items.map((item, itemIndex) => (
@@ -263,9 +312,46 @@ const renderContentBlock = (
           ))}
         </ul>
       );
+    case "code":
+      return (
+        <pre key={`code-${index}`} className="bg-gray-100 rounded-lg p-4 overflow-x-auto my-4">
+          <code className={`text-sm font-mono ${block.language ? `language-${block.language}` : ''}`}>
+            {block.code}
+          </code>
+        </pre>
+      );
+    case "table":
+      return (
+        <div key={`table-${index}`} className="overflow-x-auto my-4">
+          <table className="min-w-full border-collapse border border-gray-300">
+            <thead>
+              <tr className="bg-gray-100">
+                {block.headers.map((header, headerIndex) => (
+                  <th key={headerIndex} className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                    {parseInlineMarkdown(header)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, rowIndex) => (
+                <tr key={rowIndex} className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex} className="border border-gray-300 px-4 py-2">
+                      {parseInlineMarkdown(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    case "hr":
+      return <hr key={`hr-${index}`} className="my-6 border-t border-gray-300" />;
     case "banner":
       return (
-        <div key={`banner-${index}`} className="flex w-full justify-center">
+        <div key={`banner-${index}`} className="flex w-full justify-center my-4">
           <PromoBanner
             title="[AdSense Rectangle • Desktop 300x250 • Banner #2]"
             variant="vertical"
@@ -317,6 +403,20 @@ const normalizeArticle = (
 ): NormalizedArticle => {
   if ("content" in article && Array.isArray(article.content)) {
     const resolvedSlug = "slug" in article ? article.slug : "id" in article ? article.id : fallbackSlug;
+    
+    // Преобразуем старые блоки контента в новый формат
+    const normalizedContent = article.content.map((block) => {
+      // Если это старый формат заголовка без level, добавляем level: 2
+      if (block.type === "heading" && !("level" in block)) {
+        return { ...block, level: 2 };
+      }
+      // Если это старый формат списка без ordered, добавляем ordered: false
+      if (block.type === "list" && !("ordered" in block)) {
+        return { ...block, ordered: false };
+      }
+      return block;
+    }) as ArticleResponse["content"];
+    
     return {
       slug: resolvedSlug,
       title: article.title,
@@ -325,7 +425,7 @@ const normalizeArticle = (
       publishedAt: article.publishedAt,
       readTime: article.readTime,
       authorName: "authorName" in article ? article.authorName : undefined,
-      content: article.content,
+      content: normalizedContent,
     };
   }
   

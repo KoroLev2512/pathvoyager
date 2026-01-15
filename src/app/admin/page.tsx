@@ -16,88 +16,205 @@ const STORAGE_KEY = "pathvoyager_admin_authenticated";
 
 const parseContent = (raw: string) => {
   const blocks: Array<
-    |
-      {
-        type: "heading" | "paragraph";
-        text: string;
-      }
+    | { type: "heading"; level: number; text: string }
+    | { type: "paragraph"; text: string }
     | { type: "quote"; text: string; author?: string }
-    | { type: "list"; items: string[] }
+    | { type: "list"; items: string[]; ordered?: boolean }
     | { type: "banner"; id: string }
+    | { type: "code"; code: string; language?: string }
+    | { type: "table"; headers: string[]; rows: string[][] }
+    | { type: "hr" }
+    | { type: "link"; text: string; url: string }
+    | { type: "image"; alt: string; url: string }
   > = [];
 
-  const flushList = (buffer: string[]) => {
+  const flushList = (buffer: string[], ordered: boolean = false) => {
     if (buffer.length > 0) {
-      blocks.push({ type: "list", items: [...buffer] });
+      blocks.push({ type: "list", items: [...buffer], ordered });
       buffer.length = 0;
     }
   };
 
   const listBuffer: string[] = [];
+  let isOrderedList = false;
+  let codeBlock: string[] = [];
+  let inCodeBlock = false;
+  let codeLanguage = "";
 
-  raw.split(/\r?\n/).forEach((line) => {
+  const lines = raw.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const trimmed = line.trim();
 
+    // Обработка блоков кода
+    if (trimmed.startsWith("```")) {
+      if (inCodeBlock) {
+        // Закрываем блок кода
+        if (codeBlock.length > 0) {
+          blocks.push({ type: "code", code: codeBlock.join("\n"), language: codeLanguage });
+          codeBlock = [];
+        }
+        inCodeBlock = false;
+        codeLanguage = "";
+      } else {
+        // Открываем блок кода
+        flushList(listBuffer, isOrderedList);
+        inCodeBlock = true;
+        codeLanguage = trimmed.substring(3).trim();
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlock.push(line);
+      continue;
+    }
+
     if (!trimmed) {
-      flushList(listBuffer);
-      return;
+      flushList(listBuffer, isOrderedList);
+      continue;
     }
 
+    // Горизонтальный разделитель
+    if (trimmed.match(/^[-*_]{3,}$/)) {
+      flushList(listBuffer, isOrderedList);
+      blocks.push({ type: "hr" });
+      continue;
+    }
+
+    // Баннер
     if (trimmed === "[[banner]]") {
-      flushList(listBuffer);
+      flushList(listBuffer, isOrderedList);
       blocks.push({ type: "banner", id: "inline" });
-      return;
+      continue;
     }
 
-    if (trimmed.startsWith("# ")) {
-      flushList(listBuffer);
-      blocks.push({ type: "heading", text: trimmed.substring(2).trim() });
-      return;
+    // Заголовки (H1-H6)
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      flushList(listBuffer, isOrderedList);
+      blocks.push({ type: "heading", level: headingMatch[1].length, text: headingMatch[2] });
+      continue;
     }
 
+    // Цитаты
     if (trimmed.startsWith("> ")) {
-      flushList(listBuffer);
-      const [quoteText, author] = trimmed.substring(2).split(" — ");
-      blocks.push({ type: "quote", text: quoteText.trim(), author: author?.trim() });
-      return;
+      flushList(listBuffer, isOrderedList);
+      const quoteText = trimmed.substring(2);
+      const [text, author] = quoteText.split(" — ");
+      blocks.push({ type: "quote", text: text.trim(), author: author?.trim() });
+      continue;
     }
 
-    if (trimmed.startsWith("- ")) {
-      listBuffer.push(trimmed.substring(2).trim());
-      return;
+    // Упорядоченные списки
+    const orderedListMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (orderedListMatch) {
+      if (!isOrderedList && listBuffer.length > 0) {
+        flushList(listBuffer, false);
+      }
+      isOrderedList = true;
+      listBuffer.push(orderedListMatch[1]);
+      continue;
     }
 
-    flushList(listBuffer);
+    // Неупорядоченные списки
+    if (trimmed.match(/^[-*+]\s+(.+)$/)) {
+      if (isOrderedList && listBuffer.length > 0) {
+        flushList(listBuffer, true);
+      }
+      isOrderedList = false;
+      const itemMatch = trimmed.match(/^[-*+]\s+(.+)$/);
+      if (itemMatch) {
+        listBuffer.push(itemMatch[1]);
+      }
+      continue;
+    }
+
+    // Таблицы (простая поддержка)
+    if (trimmed.includes("|") && trimmed.split("|").length >= 3) {
+      flushList(listBuffer, isOrderedList);
+      const cells = trimmed.split("|").map(c => c.trim()).filter(c => c);
+      // Проверяем, является ли следующая строка разделителем
+      if (i + 1 < lines.length && lines[i + 1].trim().match(/^\|?[-:\s|]+\|?$/)) {
+        // Это заголовок таблицы
+        const headers = cells;
+        const rows: string[][] = [];
+        i += 2; // Пропускаем разделитель
+        // Собираем строки таблицы
+        while (i < lines.length) {
+          const rowLine = lines[i].trim();
+          if (!rowLine.includes("|")) break;
+          const rowCells = rowLine.split("|").map(c => c.trim()).filter(c => c);
+          if (rowCells.length === headers.length) {
+            rows.push(rowCells);
+          } else {
+            break;
+          }
+          i++;
+        }
+        i--; // Возвращаемся на одну строку назад
+        blocks.push({ type: "table", headers, rows });
+        continue;
+      }
+    }
+
+    // Обычный параграф
+    flushList(listBuffer, isOrderedList);
     blocks.push({ type: "paragraph", text: trimmed });
-  });
+  }
 
-  flushList(listBuffer);
+  flushList(listBuffer, isOrderedList);
+  if (codeBlock.length > 0) {
+    blocks.push({ type: "code", code: codeBlock.join("\n"), language: codeLanguage });
+  }
 
   return blocks;
 };
 
 // Преобразует контент обратно в raw формат для редактирования
 type ContentBlock =
-  | { type: "heading" | "paragraph"; text: string }
+  | { type: "heading"; level: number; text: string }
+  | { type: "paragraph"; text: string }
   | { type: "quote"; text: string; author?: string }
-  | { type: "list"; items: string[] }
-  | { type: "banner"; id: string };
+  | { type: "list"; items: string[]; ordered?: boolean }
+  | { type: "banner"; id: string }
+  | { type: "code"; code: string; language?: string }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "hr" };
 
 const formatContentRaw = (content: ContentBlock[]): string => {
   if (!Array.isArray(content)) return "";
   
   return content.map((block) => {
     if (block.type === "heading") {
-      return `# ${block.text}`;
+      const hashes = "#".repeat(block.level);
+      return `${hashes} ${block.text}`;
     }
     if (block.type === "quote") {
       return `> ${block.text}${block.author ? ` — ${block.author}` : ""}`;
     }
     if (block.type === "list") {
+      if (block.ordered) {
+        return block.items.map((item: string, index: number) => `${index + 1}. ${item}`).join("\n");
+      }
       return block.items.map((item: string) => `- ${item}`).join("\n");
     }
     if (block.type === "banner") {
       return "[[banner]]";
+    }
+    if (block.type === "code") {
+      const lang = block.language ? ` ${block.language}` : "";
+      return `\`\`\`${lang}\n${block.code}\n\`\`\``;
+    }
+    if (block.type === "table") {
+      const headerRow = `| ${block.headers.join(" | ")} |`;
+      const separatorRow = `| ${block.headers.map(() => "---").join(" | ")} |`;
+      const dataRows = block.rows.map(row => `| ${row.join(" | ")} |`).join("\n");
+      return `${headerRow}\n${separatorRow}\n${dataRows}`;
+    }
+    if (block.type === "hr") {
+      return "---";
     }
     if (block.type === "paragraph") {
       return block.text;
@@ -140,6 +257,7 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const categoryOptions = useMemo(() => categories, []);
 
@@ -411,9 +529,51 @@ export default function AdminPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsSubmitting(true);
-    setMessage(null);
     setError(null);
+    setMessage(null);
+    
+    // Валидация обязательных полей
+    const errors: Record<string, string> = {};
+    
+    if (!form.title.trim()) {
+      errors.title = "Заголовок обязателен для заполнения";
+    }
+    
+    if (!form.slug.trim()) {
+      errors.slug = "Слаг (URL) обязателен для заполнения";
+    }
+    
+    if (!form.categoryId) {
+      errors.categoryId = "Категория обязательна для выбора";
+    }
+    
+    if (!form.authorName.trim()) {
+      errors.authorName = "Автор обязателен для заполнения";
+    }
+    
+    if (!form.publishedAt) {
+      errors.publishedAt = "Дата публикации обязательна для заполнения";
+    }
+    
+    if (!form.excerpt.trim()) {
+      errors.excerpt = "Краткое описание обязательно для заполнения";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      setIsSubmitting(false);
+      // Прокручиваем к первой ошибке
+      const firstErrorField = Object.keys(errors)[0];
+      const errorElement = document.querySelector(`[name="${firstErrorField}"]`);
+      if (errorElement) {
+        errorElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        (errorElement as HTMLElement).focus();
+      }
+      return;
+    }
+    
+    setValidationErrors({});
+    setIsSubmitting(true);
 
     try {
       const apiBaseUrl = getApiBaseUrl();
@@ -468,6 +628,7 @@ export default function AdminPage() {
       const { slug } = await response.json();
       setMessage(`Статья сохранена. Ссылка: /posts/${slug}`);
       setForm(initialForm);
+      setValidationErrors({});
 
       // Используем ту же переменную apiBaseUrl, которая уже определена выше
       const refreshUrl = apiBaseUrl ? `${apiBaseUrl}/api/articles` : "/api/articles";
@@ -698,9 +859,7 @@ export default function AdminPage() {
                       )}
                     </div>
                     <p className="font-open-sans text-base leading-[1.6] text-[#767676]">
-                      Используйте форму ниже, чтобы подготовить материал для PathVoyager. Контент можно описывать в формате Markdown:
-                      <br />
-                      <code>#</code> — заголовок, <code>-</code> — элементы списка, <code>&gt;</code> — цитата, <code>[[banner]]</code> — место для баннера внутри текста.
+                      Используйте форму ниже, чтобы подготовить материал для PathVoyager
                     </p>
                   </div>
                   <button
@@ -720,33 +879,79 @@ export default function AdminPage() {
                       Заголовок
                     </span>
                     <input
-                      required
+                      name="title"
                       value={form.title}
-                      onChange={(event) => handleChange("title")(event.target.value)}
-                      className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                      onChange={(event) => {
+                        handleChange("title")(event.target.value);
+                        if (validationErrors.title) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.title;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`rounded-lg border px-4 py-2 font-open-sans text-base focus:outline-none ${
+                        validationErrors.title 
+                          ? "border-red-500 focus:border-red-500" 
+                          : "border-[#d6d6d6] focus:border-[#114b5f]"
+                      }`}
                       placeholder="Например: Time Zone Hacking"
                     />
+                    {validationErrors.title && (
+                      <span className="text-sm text-red-500">{validationErrors.title}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
                       Слаг (URL)
                     </span>
                     <input
-                      required
+                      name="slug"
                       value={form.slug}
-                      onChange={(event) => handleChange("slug")(event.target.value)}
-                      className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                      onChange={(event) => {
+                        handleChange("slug")(event.target.value);
+                        if (validationErrors.slug) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.slug;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`rounded-lg border px-4 py-2 font-open-sans text-base focus:outline-none ${
+                        validationErrors.slug 
+                          ? "border-red-500 focus:border-red-500" 
+                          : "border-[#d6d6d6] focus:border-[#114b5f]"
+                      }`}
                       placeholder="Например: time-zone-hacking"
                     />
+                    {validationErrors.slug && (
+                      <span className="text-sm text-red-500">{validationErrors.slug}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
                       Категория
                     </span>
                     <select
+                      name="categoryId"
                       value={form.categoryId}
-                      onChange={(event) => handleChange("categoryId")(event.target.value)}
-                      className="appearance-none rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none cursor-pointer bg-no-repeat bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23767676%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20%2F%3E%3C%2Fsvg%3E')] bg-[position:right_0.5rem_center] bg-[size:1.5em_1.5em]"
+                      onChange={(event) => {
+                        handleChange("categoryId")(event.target.value);
+                        if (validationErrors.categoryId) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.categoryId;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`appearance-none rounded-lg border px-4 py-2 font-open-sans text-base focus:outline-none cursor-pointer bg-no-repeat bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23767676%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20%2F%3E%3C%2Fsvg%3E')] bg-[position:right_0.5rem_center] bg-[size:1.5em_1.5em] ${
+                        validationErrors.categoryId 
+                          ? "border-red-500 focus:border-red-500" 
+                          : "border-[#d6d6d6] focus:border-[#114b5f]"
+                      }`}
                     >
                       {categoryOptions.map((category) => (
                         <option key={category.id} value={category.id} className="cursor-pointer">
@@ -754,17 +959,37 @@ export default function AdminPage() {
                         </option>
                       ))}
                     </select>
+                    {validationErrors.categoryId && (
+                      <span className="text-sm text-red-500">{validationErrors.categoryId}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
                       Автор
                     </span>
                     <input
+                      name="authorName"
                       value={form.authorName}
-                      onChange={(event) => handleChange("authorName")(event.target.value)}
-                      className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                      onChange={(event) => {
+                        handleChange("authorName")(event.target.value);
+                        if (validationErrors.authorName) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.authorName;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`rounded-lg border px-4 py-2 font-open-sans text-base focus:outline-none ${
+                        validationErrors.authorName 
+                          ? "border-red-500 focus:border-red-500" 
+                          : "border-[#d6d6d6] focus:border-[#114b5f]"
+                      }`}
                       placeholder="Имя автора"
                     />
+                    {validationErrors.authorName && (
+                      <span className="text-sm text-red-500">{validationErrors.authorName}</span>
+                    )}
                   </label>
                   <label className="flex flex-col gap-2">
                     <span className="font-open-sans text-sm uppercase tracking-[0.08em] text-[#767676]">
@@ -782,11 +1007,28 @@ export default function AdminPage() {
                       Дата публикации
                     </span>
                     <input
+                      name="publishedAt"
                       type="date"
                       value={form.publishedAt}
-                      onChange={(event) => handleChange("publishedAt")(event.target.value)}
-                      className="rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                      onChange={(event) => {
+                        handleChange("publishedAt")(event.target.value);
+                        if (validationErrors.publishedAt) {
+                          setValidationErrors(prev => {
+                            const newErrors = { ...prev };
+                            delete newErrors.publishedAt;
+                            return newErrors;
+                          });
+                        }
+                      }}
+                      className={`rounded-lg border px-4 py-2 font-open-sans text-base focus:outline-none ${
+                        validationErrors.publishedAt 
+                          ? "border-red-500 focus:border-red-500" 
+                          : "border-[#d6d6d6] focus:border-[#114b5f]"
+                      }`}
                     />
+                    {validationErrors.publishedAt && (
+                      <span className="text-sm text-red-500">{validationErrors.publishedAt}</span>
+                    )}
                   </label>
                   <label className="flex flex-row items-center gap-3 cursor-pointer">
                     <input
@@ -806,11 +1048,28 @@ export default function AdminPage() {
                     Краткое описание
                   </span>
                   <textarea
+                    name="excerpt"
                     value={form.excerpt}
-                    onChange={(event) => handleChange("excerpt")(event.target.value)}
-                    className="min-h-[100px] rounded-lg border border-[#d6d6d6] px-4 py-2 font-open-sans text-base focus:border-[#114b5f] focus:outline-none"
+                    onChange={(event) => {
+                      handleChange("excerpt")(event.target.value);
+                      if (validationErrors.excerpt) {
+                        setValidationErrors(prev => {
+                          const newErrors = { ...prev };
+                          delete newErrors.excerpt;
+                          return newErrors;
+                        });
+                      }
+                    }}
+                    className={`min-h-[100px] rounded-lg border px-4 py-2 font-open-sans text-base focus:outline-none ${
+                      validationErrors.excerpt 
+                        ? "border-red-500 focus:border-red-500" 
+                        : "border-[#d6d6d6] focus:border-[#114b5f]"
+                    }`}
                     placeholder="Короткое описание для карточки"
                   />
+                  {validationErrors.excerpt && (
+                    <span className="text-sm text-red-500">{validationErrors.excerpt}</span>
+                  )}
                 </label>
 
                 <div className="flex flex-col gap-2">
