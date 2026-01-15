@@ -25,34 +25,7 @@ npm install
 
 Убедитесь, что MySQL установлен и запущен. База данных должна быть создана заранее (через ISPmanager или вручную).
 
-Настройте переменные окружения. Создайте файл `.env` в корне проекта:
-
-```env
-# Подключение к MySQL
-# Если используете DATABASE_URL:
-# DATABASE_URL=mysql://user:password@localhost:3306/pathvoyager
-
-# Или используйте отдельные переменные:
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=admin
-DB_PASSWORD=aboba-2512
-DB_NAME=pathvoyager
-
-# Альтернативные переменные (также поддерживаются):
-# MYSQL_HOST=localhost
-# MYSQL_PORT=3306
-# MYSQL_USER=admin
-# MYSQL_PASSWORD=aboba-2512
-# MYSQL_DATABASE=pathvoyager
-
-# Директория для загруженных изображений (опционально)
-# UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads
-
-# Опционально: переопределить базовый URL API на клиенте
-# По умолчанию используется тот же домен, что и фронтенд
-# NEXT_PUBLIC_API_BASE_URL=https://pathvoyager.com
-```
+Настройте переменные окружения. Создайте файл `.env` в корне проекта
 
 **Примечание:** Таблица `articles` будет создана автоматически при первом запуске сервера.
 
@@ -69,10 +42,6 @@ npm run dev
 ### 5. Использование админ-панели
 
 Откройте [http://localhost:3000/admin](http://localhost:3000/admin) для создания и управления статьями.
-
-**Учетные данные:**
-- Логин: `admin`
-- Пароль: `aboba-2512`
 
 **Формат контента:**
 - `# Заголовок` — создает заголовок блока
