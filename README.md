@@ -25,38 +25,34 @@ npm install
 
 Убедитесь, что MySQL установлен и запущен. База данных должна быть создана заранее (через ISPmanager или вручную).
 
-<<<<<<< HEAD
-Настройте переменные окружения. Создайте файл `.env` в корне проекта
-=======
 Настройте переменные окружения. Создайте файл `.env` в корне проекта:
 
 ```env
 # Подключение к MySQL
 # Если используете DATABASE_URL:
-# DATABASE_URL=mysql://user:password@localhost:3306/pathvoyager
+# DATABASE_URL=mysql://user:password@localhost:3306/database_name
 
 # Или используйте отдельные переменные:
 DB_HOST=localhost
 DB_PORT=3306
-DB_USER=pathvoyager_admin
-DB_PASSWORD=IceStorm-285784
-DB_NAME=pathvoyager_db
+DB_USER=your_database_user
+DB_PASSWORD=your_database_password
+DB_NAME=your_database_name
 
 # Альтернативные переменные (также поддерживаются):
 # MYSQL_HOST=localhost
 # MYSQL_PORT=3306
-# MYSQL_USER=pathvoyager_admin
-# MYSQL_PASSWORD=IceStorm-285784
-# MYSQL_DATABASE=pathvoyager_db
+# MYSQL_USER=your_database_user
+# MYSQL_PASSWORD=your_database_password
+# MYSQL_DATABASE=your_database_name
 
 # Директория для загруженных изображений (опционально)
-# UPLOADS_DIR=/var/www/clo/data/www/pathvoyager.com/public/uploads
+# UPLOADS_DIR=/path/to/uploads/directory
 
 # Опционально: переопределить базовый URL API на клиенте
 # По умолчанию используется тот же домен, что и фронтенд
-# NEXT_PUBLIC_API_BASE_URL=https://pathvoyager.com
+# NEXT_PUBLIC_API_BASE_URL=https://yourdomain.com
 ```
->>>>>>> 9b2ba81 (Update database configuration to pathvoyager_db)
 
 **Примечание:** Таблица `articles` будет создана автоматически при первом запуске сервера.
 
