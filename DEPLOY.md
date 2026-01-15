@@ -64,16 +64,16 @@
 # MySQL Database Configuration
 DB_HOST=localhost
 DB_PORT=3306
-DB_USER=admin
-DB_PASSWORD=aboba-2512
-DB_NAME=pathvoyager
+DB_USER=pathvoyager_admin
+DB_PASSWORD=IceStorm-285784
+DB_NAME=pathvoyager_db
 
 # Alternative MySQL environment variables (for compatibility)
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
-MYSQL_USER=admin
-MYSQL_PASSWORD=aboba-2512
-MYSQL_DATABASE=pathvoyager
+MYSQL_USER=pathvoyager_admin
+MYSQL_PASSWORD=IceStorm-285784
+MYSQL_DATABASE=pathvoyager_db
 
 # Node Environment
 NODE_ENV=production
@@ -100,16 +100,25 @@ ADMIN_EMAIL=webmaster@pathvoyager.com
 ```bash
 cd /var/www/clo/data/www/pathvoyager.com
 
-# Используйте правильный путь к npm
-/var/www/clo/data/.nvm/versions/node/v25.2.0/bin/npm install --production
+# Убедитесь, что файл .npmrc присутствует (он должен быть в репозитории)
+# Если его нет, создайте: echo "legacy-peer-deps=true" > .npmrc
+
+# ВАЖНО: Устанавливаем ВСЕ зависимости (включая devDependencies) для сборки
+# TypeScript и другие dev-зависимости нужны для сборки Next.js
+/var/www/clo/data/.nvm/versions/node/v25.2.0/bin/npm install --legacy-peer-deps
 ```
 
 Или добавьте Node.js в PATH:
 ```bash
 export PATH="/var/www/clo/data/.nvm/versions/node/v25.2.0/bin:$PATH"
 cd /var/www/clo/data/www/pathvoyager.com
-npm install --production
+npm install --legacy-peer-deps
 ```
+
+**Важно:** 
+- Флаг `--legacy-peer-deps` необходим из-за конфликта peer dependencies между React 19 и `@gravity-ui/components`
+- НЕ используйте `--production`, так как для сборки нужны devDependencies (TypeScript, eslint и др.)
+- Файл `.npmrc` в корне проекта также содержит эту настройку
 
 ### Шаг 4: Сборка Next.js приложения
 
@@ -282,8 +291,8 @@ export PATH="/var/www/clo/data/.nvm/versions/node/v25.2.0/bin:$PATH"
 # Если используете git
 git pull
 
-# Установка зависимостей
-npm install --production
+# Установка зависимостей (включая devDependencies для сборки)
+npm install --legacy-peer-deps
 
 # Сборка Next.js приложения
 npm run build

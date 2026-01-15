@@ -23,9 +23,9 @@ const getDbConfig = (): DbConfig => {
   const host = process.env.DB_HOST || process.env.MYSQL_HOST || "localhost";
   const portValue = process.env.DB_PORT || process.env.MYSQL_PORT;
   const port = portValue ? Number(portValue) : 3306;
-  const user = process.env.DB_USER || process.env.MYSQL_USER || "admin";
-  const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || "aboba-2512";
-  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || "pathvoyager";
+  const user = process.env.DB_USER || process.env.MYSQL_USER || "pathvoyager_admin";
+  const password = process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || "IceStorm-285784";
+  const database = process.env.DB_NAME || process.env.MYSQL_DATABASE || "pathvoyager_db";
 
   return { host, port, user, password, database };
 };
